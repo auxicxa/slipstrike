@@ -69,6 +69,7 @@ const lobbyActions = {
     net.send({ t: C.LOADOUT, p, s });
   },
   leave: () => leaveOnline(true),
+  settings: () => menus.settings(() => { if (room) menus.lobby(room, net.id, lobbyActions); else menus.title(); }),
 };
 
 // ------------------------------------------------------------------ server messages

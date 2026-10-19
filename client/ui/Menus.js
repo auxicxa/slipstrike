@@ -144,6 +144,7 @@ export class Menus {
       h('div.row', h('div.grow',
         h('div.dim', room.pub ? 'Public room (quick play)' : 'Private room. Share this code:'),
         h('div.lobby-code', room.code)),
+        h('button.btn', { on: { click: act.settings } }, 'Settings'),
         h('button.btn', { on: { click: act.leave } }, 'Leave')),
       h('h3', 'Mode' + (isHost ? '' : ' (host picks)')),
       h('div.row', ...modeBtns, h('span.grow'), mapSel),
