@@ -8,7 +8,7 @@ const EXEC = process.env.CHROMIUM_PATH || (fs.existsSync('/opt/pw-browsers/chrom
 export async function launch() {
   return chromium.launch({
     executablePath: EXEC,
-    args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required'],
+    args: ['--disable-background-networking', '--no-first-run', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist', '--autoplay-policy=no-user-gesture-required'],
   });
 }
 
