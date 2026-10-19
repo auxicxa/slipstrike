@@ -1,0 +1,41 @@
+// Phase 1/2 smoke test: practice range loads, movement works, no errors.
+import { launch, openPage, sleep, check } from './lib.mjs';
+
+const browser = await launch();
+const { page, errors } = await openPage(browser);
+console.log('practice range:');
+await page.click('text=Practice Range (offline)');
+await sleep(300);
+await page.click('text=Click to play');
+await sleep(500);
+const state = () => page.evaluate(() => {
+  const s = window.__slip.game.session; const ms = s.me.ms;
+  return { x: ms.x, y: ms.y, z: ms.z, vx: ms.vx, vz: ms.vz, grounded: ms.grounded, sliding: ms.sliding, paused: window.__slip.game.paused, hp: s.me.hp };
+});
+let s0 = await state();
+check(!s0.paused, 'game unpaused after click to play');
+check(s0.grounded, 'player standing on the ground');
+await page.keyboard.down('KeyW');
+await page.keyboard.down('ShiftLeft');
+await sleep(900);
+let s1 = await state();
+const sp = Math.hypot(s1.vx, s1.vz);
+check(s1.z < s0.z - 3, `moved forward (z ${s0.z.toFixed(2)} → ${s1.z.toFixed(2)})`);
+check(sp > 8, `sprint speed ${sp.toFixed(2)} m/s`);
+await page.keyboard.down('KeyC');
+await sleep(80);
+let s2 = await state();
+check(s2.sliding && Math.hypot(s2.vx, s2.vz) > sp + 1, `slide burst (${Math.hypot(s2.vx, s2.vz).toFixed(2)} m/s)`);
+await page.keyboard.up('KeyC');
+await page.keyboard.up('ShiftLeft');
+await page.keyboard.up('KeyW');
+await page.keyboard.press('Space');
+await sleep(150);
+let s3 = await state();
+check(!s3.grounded && s3.y > 0.3, `jumped (y=${s3.y.toFixed(2)})`);
+await sleep(1200);
+await page.screenshot({ path: 'e2e/out/practice.png' });
+const perf = await page.evaluate(() => ({ calls: window.__slip.game.r.info.render.calls, tris: window.__slip.game.r.info.render.triangles, fps: window.__slip.game.fps }));
+console.log('  render:', JSON.stringify(perf));
+check(errors.length === 0, 'no console errors' + (errors.length ? ': ' + errors.join(' | ') : ''));
+await browser.close();
