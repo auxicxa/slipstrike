@@ -23,7 +23,7 @@ const sp = Math.hypot(s1.vx, s1.vz);
 check(s1.z < s0.z - 3, `moved forward (z ${s0.z.toFixed(2)} → ${s1.z.toFixed(2)})`);
 check(sp > 8, `sprint speed ${sp.toFixed(2)} m/s`);
 await page.keyboard.down('KeyC');
-await sleep(80);
+await sleep(200);
 let s2 = await state();
 check(s2.sliding && Math.hypot(s2.vx, s2.vz) > sp + 1, `slide burst (${Math.hypot(s2.vx, s2.vz).toFixed(2)} m/s)`);
 await page.keyboard.up('KeyC');

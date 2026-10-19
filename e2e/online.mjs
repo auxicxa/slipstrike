@@ -63,11 +63,13 @@ await page.evaluate(() => {
     g.yaw = Math.atan2(-dx, -dz) + o.me.ws.recY; g.pitch = Math.atan2(dy, Math.hypot(dx, dz)) - o.me.ws.recP;
   }, 16);
 });
-for (let i = 0; i < 12 && hits === 0; i++) {
+await page.keyboard.down('KeyE'); // aim down sights for tighter spread
+for (let i = 0; i < 25 && hits === 0; i++) {
   await page.keyboard.down('KeyF'); await sleep(700); await page.keyboard.up('KeyF'); await sleep(200);
   const alive = await page.evaluate(() => window.__slip.online?.me.alive);
   if (!alive) await page.waitForFunction(() => window.__slip.online?.me.alive, null, { timeout: 20000 }).catch(() => {});
 }
+await page.keyboard.up('KeyE');
 check(hits > 0, `server confirmed ${hits} hit(s) on the bot`);
 await page.screenshot({ path: `e2e/out/online-${label.replace(/\W+/g, '_')}.png` });
 const final = await snapInfo();

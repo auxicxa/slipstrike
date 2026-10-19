@@ -11,17 +11,19 @@ await page.click('text=Create Room');
 await page.waitForSelector('.lobby-code');
 await page.click('button:has-text("2v2")');
 await page.waitForFunction(() => window.__slip.room?.mode === '2v2');
+await page.selectOption('select.field', 'kiln'); // compact map: the bots find us quickly
+await page.waitForFunction(() => window.__slip.room?.map === 'kiln');
 const code = (await page.textContent('.lobby-code')).trim();
 const bots = spawn('node', ['scripts/bot.js', '--count', '3', '--code', code, '--duration', '300', '--quiet', '--skill', '0.9'], { stdio: 'ignore' });
 await page.waitForFunction(() => window.__slip.room?.players.length === 4, null, { timeout: 10000 });
 check(true, 'mode set to 2v2 and 3 bots joined');
 const teams = await page.evaluate(() => window.__slip.room.players.map((p) => p.team).sort().join(''));
 check(teams === '0011', `teams auto-balanced (${teams})`);
-await page.click('button:has-text("Ready")');
+await page.click('button:text-is("Ready")');
 await page.waitForFunction(() => window.__slip.online?.ready && window.__slip.online.phase === 'freeze', null, { timeout: 15000 });
 await page.click('text=Click to play');
 await sleep(200);
-check(await page.isVisible('.loadout-panel.show'), 'loadout picker shown during freeze');
+check(await page.waitForSelector('.loadout-panel.show', { timeout: 2500 }).then(() => true, () => false), 'loadout picker shown during freeze');
 await page.keyboard.press('Digit2'); // primary #2 = shotgun
 await page.waitForFunction(() => window.__slip.online.me.ws.slots[0] === 'shotgun', null, { timeout: 3000 }).then(() => check(true, 'picked shotgun with key 2 during freeze (server applied it)'), () => check(false, 'loadout pick applied'));
 await page.keyboard.down('Tab');
@@ -30,9 +32,15 @@ const rows = await page.$$eval('.scoreboard.show tr', (r) => r.length);
 check(rows >= 6, `scoreboard opens with Tab (${rows} rows)`);
 await page.screenshot({ path: 'e2e/out/scoreboard.png' });
 await page.keyboard.up('Tab');
-// Stand still and let the enemy bots find us
-await page.waitForFunction(() => window.__slip.online.phase === 'live', null, { timeout: 15000 });
-const died = await page.waitForFunction(() => !window.__slip.online.me.alive, null, { timeout: 60000 }).then(() => true, () => false);
+// Walk toward the enemy side until the bots get us (may take a few rounds)
+let died = false;
+for (let i = 0; i < 5 && !died; i++) {
+  const live = await page.waitForFunction(() => window.__slip.online?.phase === 'live' && window.__slip.online.me.alive, null, { timeout: 30000 }).then(() => true, () => false);
+  if (!live) break;
+  await page.keyboard.down('KeyW');
+  died = await page.waitForFunction(() => !window.__slip.online.me.alive, null, { timeout: 40000 }).then(() => true, () => false);
+  await page.keyboard.up('KeyW');
+}
 check(died, 'local player was eliminated');
 if (died) {
   await sleep(300);

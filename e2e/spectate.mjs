@@ -10,23 +10,28 @@ await page.click('text=Create Room');
 await page.waitForSelector('.lobby-code');
 await page.click('button:has-text("3v3")');
 await page.waitForFunction(() => window.__slip.room?.mode === '3v3');
+await page.selectOption('select.field', 'kiln'); // compact map: the bots find us quickly
+await page.waitForFunction(() => window.__slip.room?.map === 'kiln');
 const code = (await page.textContent('.lobby-code')).trim();
 const bots = spawn('node', ['scripts/bot.js', '--count', '5', '--code', code, '--duration', '300', '--quiet', '--skill', '0.5'], { stdio: 'ignore' });
 await page.waitForFunction(() => window.__slip.room?.players.length === 6, null, { timeout: 10000 });
-await page.click('button:has-text("Ready")');
+await page.click('button:text-is("Ready")');
 await page.waitForFunction(() => window.__slip.online?.ready, null, { timeout: 15000 });
 await page.click('text=Click to play');
 let ok = false;
-for (let attempt = 0; attempt < 6 && !ok; attempt++) {
-  await page.waitForFunction(() => window.__slip.online.phase === 'live' && window.__slip.online.me.alive, null, { timeout: 60000 });
+for (let attempt = 0; attempt < 8 && !ok; attempt++) {
+  // If the match ended (results/lobby), ready up again for another match
+  if (await page.isVisible('.lobby-code')) { await page.click('button:text-is("Ready")'); }
+  const live = await page.waitForFunction(() => window.__slip.online?.phase === 'live' && window.__slip.online.me.alive, null, { timeout: 60000 }).then(() => true, () => false);
+  if (!live) { console.log(`    attempt ${attempt}: no live round`); continue; }
   // Walk toward the enemy side to get killed quickly
   await page.keyboard.down('KeyW');
-  const died = await page.waitForFunction(() => !window.__slip.online.me.alive && window.__slip.online.phase === 'live', null, { timeout: 45000 }).then(() => true, () => false);
+  const died = await page.waitForFunction(() => window.__slip.online && !window.__slip.online.me.alive && window.__slip.online.phase === 'live', null, { timeout: 45000 }).then(() => true, () => false);
   await page.keyboard.up('KeyW');
-  if (!died) continue;
+  if (!died) { console.log(`    attempt ${attempt}: survived`); continue; }
   await sleep(250);
-  const s1 = await page.evaluate(() => { const v = window.__slip.online.spectateView(); return v && { name: v.name, n: window.__slip.online.spectateCandidates().length }; });
-  if (!s1) continue;
+  const s1 = await page.evaluate(() => { if (!window.__slip.online) return null; const v = window.__slip.online.spectateView(); return v && { name: v.name, n: window.__slip.online.spectateCandidates().length }; });
+  if (!s1) { console.log(`    attempt ${attempt}: died but no living teammate`); continue; }
   const label = (await page.textContent('.spectate')).trim();
   const cam = await page.evaluate(() => { const c = window.__slip.game.r.camera.position; const v = window.__slip.online.spectateView(); return Math.hypot(c.x - v.x, c.z - v.z); });
   check(/Spectating/.test(label), `spectating "${s1.name}" (${s1.n} living teammate(s)), label "${label}"`);
