@@ -224,3 +224,4 @@ h3 { margin: 18px 0 8px; font-size: 13px; color: var(--dim); text-transform: upp
   .teams { grid-template-columns: 1fr; }
   .scoreboard { min-width: 92vw; }
 }
+.scoreboard.show ~ .loadout-panel { display: none; }

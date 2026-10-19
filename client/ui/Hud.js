@@ -296,7 +296,11 @@ export class Hud {
     } else this.perf.style.display = 'none';
 
     // Spectating
-    if (spec) { this.spec.textContent = `Spectating ${spec.name}  ·  [${binds.label('fire')}] / [${binds.label('jump')}] next`; this.spec.style.display = ''; }
+    if (spec) {
+      const fk = binds.binds.fire.find((c) => !c.startsWith('Mouse')) ? binds.label('fire', binds.binds.fire.findIndex((c) => !c.startsWith('Mouse'))) : binds.label('fire');
+      this.spec.textContent = `Spectating ${spec.name}  ·  [${fk}] next  ·  [${binds.label('jump')}] previous`;
+      this.spec.style.display = '';
+    }
     else if (info.deadMsg && !alive) { this.spec.textContent = info.deadMsg; this.spec.style.display = ''; }
     else this.spec.style.display = 'none';
 
