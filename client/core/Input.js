@@ -13,7 +13,7 @@ export class Input {
     this.enabled = false;       // game input active (in a match / practice)
     this.lockTarget = null;
     this.capture = null;        // keybind capture callback
-    this.listeners = { action: new Set(), lock: new Set(), lockError: new Set() };
+    this.listeners = { action: new Set(), lock: new Set(), lockError: new Set(), key: new Set() };
     this.toggles = {};          // for toggle-mode actions (ADS)
     this._lastLockExit = 0;
     // ?nolock in the URL: behave as if the pointer were locked (automated tests, or browsers without pointer lock)
@@ -51,6 +51,7 @@ export class Input {
   press(code) {
     if (this.down.has(code)) return;
     this.down.add(code);
+    this.emit('key', code);
     for (const a of binds.actionsFor(code)) {
       this.latched.add(a);
       if (a === 'ads') this.toggles.ads = !this.toggles.ads;

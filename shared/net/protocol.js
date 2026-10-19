@@ -23,7 +23,7 @@ export const C = {
   READY: 'ready',        // { ready }
   LOADOUT: 'loadout',    // { p, s }
   INPUT: 'in',           // { s: seq, b: buttons, y: yaw, p: pitch, w: weaponSel, v: viewTick }
-  PING: 'ping',          // { c: clientTime }
+  PING: 'ping',          // { c: clientTime, r?: measured rtt ms }
   CHAT: 'qc',            // { i: index }
   SPECTATE: 'spec',      // { d: +1/-1 }
 };
@@ -77,10 +77,10 @@ export function parseClientMessage(raw) {
       if (!isNum(m.y) || !isNum(m.p) || Math.abs(m.y) > 1000 || Math.abs(m.p) > 2) return null;
       if (!isInt(m.w) || m.w < 0 || m.w > 4) return null;
       if (!isNum(m.v)) return null;
-      return m;
+      return { t: m.t, s: m.s, b: m.b, y: m.y, p: m.p, w: m.w, v: m.v };
     case C.PING:
       if (!isNum(m.c)) return null;
-      return { t: m.t, c: m.c };
+      return { t: m.t, c: m.c, r: isNum(m.r) ? m.r : undefined };
     case C.CHAT:
       if (!isInt(m.i) || m.i < 0 || m.i > 7) return null;
       return { t: m.t, i: m.i };

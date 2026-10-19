@@ -28,6 +28,9 @@ export const ROUND = {
   countdown: 5, // lobby countdown after all ready
 };
 
+// Test mode (server only): FAST_ROUNDS=1 shortens the timers so bot matches finish quickly
+if (globalThis.process?.env?.FAST_ROUNDS) Object.assign(ROUND, { freezeTime: 3, roundTime: 40, roundEndTime: 1.5, halftimeExtra: 1, matchEndTime: 4, countdown: 1 });
+
 export const FFA = {
   killLimit: 25,
   timeLimit: 300,
