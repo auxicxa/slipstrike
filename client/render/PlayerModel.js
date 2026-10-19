@@ -86,6 +86,7 @@ export class PlayerModel {
     const vis = e.alive !== false;
     this.root.visible = vis;
     this.shadow.visible = vis && floorY > -100;
+    if (this.label) this.label.visible = vis;
     if (!vis) return;
     this.setWeapon(e.weapon);
     this.root.position.set(e.x, e.y, e.z);
@@ -106,12 +107,41 @@ export class PlayerModel {
     this.legR.rotation.x = e.sliding ? -1.0 : -swing;
     if (e.grounded === false && !e.sliding) { this.legL.rotation.x = -0.4; this.legR.rotation.x = 0.2; }
 
+    if (this.label) {
+      this.label.visible = vis;
+      this.label.position.set(e.x, e.y + e.h + 0.35, e.z);
+    }
     this.shadow.position.set(e.x, floorY + 0.02, e.z);
     const hgt = Math.max(0, e.y - floorY);
     this.shadow.scale.setScalar(Math.max(0.4, 1 - hgt * 0.15));
   }
 
+  /** Name tag above the head (teammates only; drawn through walls so you can find each other). */
+  setLabel(text, color = '#ffffff') {
+    const key = text ? text + color : '';
+    if (key === this.labelKey) return;
+    this.labelKey = key;
+    if (this.label) { this.scene.remove(this.label); this.label.material.map.dispose(); this.label.material.dispose(); this.label = null; }
+    if (!text) return;
+    const c = document.createElement('canvas');
+    c.width = 256; c.height = 48;
+    const g = c.getContext('2d');
+    g.font = 'bold 30px system-ui, sans-serif';
+    g.textAlign = 'center'; g.textBaseline = 'middle';
+    g.lineWidth = 6; g.strokeStyle = 'rgba(0,0,0,0.7)';
+    g.strokeText(text, 128, 24);
+    g.fillStyle = color;
+    g.fillText(text, 128, 24);
+    const tex = new THREE.CanvasTexture(c);
+    tex.colorSpace = THREE.SRGBColorSpace;
+    this.label = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true }));
+    this.label.scale.set(1.4, 0.26, 1);
+    this.label.renderOrder = 10;
+    this.scene.add(this.label);
+  }
+
   dispose() {
+    this.setLabel(null);
     this.scene.remove(this.root, this.shadow);
   }
 }

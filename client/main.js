@@ -7,6 +7,7 @@ import { OnlineMatch } from './modes/OnlineMatch.js';
 import { net } from './net/Net.js';
 import { C, S } from '../shared/net/protocol.js';
 import { sanitizeLoadout } from '../shared/config/weapons.js';
+import { settings } from './core/Settings.js';
 
 const game = new Game(document.getElementById('app'));
 let menus;
@@ -19,9 +20,9 @@ function savedLoadout() {
 
 const app = {
   game,
-  startPractice() {
+  startPractice(opts = {}) {
     leaveOnline(false);
-    game.start(new OfflinePractice(game, { loadout: savedLoadout() }));
+    game.start(new OfflinePractice(game, { mapId: opts.mapId, loadout: savedLoadout() }));
     showPause(true);
   },
   async connectThen(name, fn) {
@@ -131,4 +132,4 @@ game.onPauseChange = (paused) => {
 menus.title();
 
 // Exposed for automated tests and debugging in the console
-window.__slip = { game, menus, app, input, net, get room() { return room; }, get online() { return online; } };
+window.__slip = { game, menus, app, input, net, settings, get room() { return room; }, get online() { return online; } };

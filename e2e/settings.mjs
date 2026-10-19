@@ -70,7 +70,7 @@ await sleep(500);
 const a3 = await ads();
 check(a1 > 0.95 && a2 > 0.95 && a3 < 0.05, `ADS toggle: tap E → scoped (${a1.toFixed(2)}), stays (${a2.toFixed(2)}), tap again → off (${a3.toFixed(2)})`);
 // switch to hold mode through the settings store
-await page.evaluate(async () => { const m = await import('/core/Settings.js'); m.settings.set('adsMode', 'hold'); });
+await page.evaluate(() => window.__slip.settings.set('adsMode', 'hold'));
 await page.keyboard.down('KeyE'); await sleep(400);
 const h1 = await ads();
 await page.keyboard.up('KeyE'); await sleep(400);

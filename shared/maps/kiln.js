@@ -14,7 +14,7 @@ m.box(17, 0, 0, 18, 8, 23, WALL);
 // Spawn cover
 m.block(-5, 15.5, 3.2, 1.2, 1.3, LOW);
 m.block(5, 15.5, 3.2, 1.2, 1.3, LOW);
-m.block(0, 19.5, 2, 2, 2.2, CRATE);
+m.block(0, 12.5, 2, 2, 2.2, CRATE);
 
 // Left raised walkway with a ramp up from the spawn side; its front edge is a ledge to slide off
 m.box(-17, 0, 4, -11, 2.5, 13, PLAT);

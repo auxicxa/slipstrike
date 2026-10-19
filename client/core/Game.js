@@ -120,7 +120,10 @@ export class Game {
       if (input.active('sprint')) b |= BTN.SPRINT;
       if (input.active('dash')) b |= BTN.DASH;
       if (input.active('fire')) b |= BTN.FIRE;
-      if (input.adsActive()) b |= BTN.ADS;
+      // The knife's heavy attack lives on the ADS key: always treat it as a plain press there
+      const lp = this.session?.localPlayer?.();
+      const knife = lp?.ws && currentWeapon(lp.ws).kind === 'melee';
+      if (knife ? input.active('ads') : input.adsActive()) b |= BTN.ADS;
       if (input.active('reload')) b |= BTN.RELOAD;
       if (input.wasPressed('slot1')) w = 1;
       else if (input.wasPressed('slot2')) w = 2;
@@ -283,6 +286,8 @@ export class Game {
       const color = e.dummy ? (e.hp < 100 ? 0xc04a4a : 0x8a8f99) : TEAM_COLORS[e.team] ?? 0xffffff;
       if (!m) { m = new PlayerModel(this.r.scene, color); this.models.set(e.id, m); }
       m.setColor(color);
+      const tag = this.session.teamTag?.(e);
+      m.setLabel(tag ? tag.name : null, tag?.color);
       const floor = coll ? coll.supportHeight(e.x, e.z, 0.3, e.y + 0.1) : e.y;
       m.update(e, dt, floor);
     }

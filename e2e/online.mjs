@@ -39,6 +39,16 @@ check(b.last < 0.25, 'prediction errors stay small');
 check(b.remotes === 1, 'remote player visible (interpolated)');
 const pingText = await page.textContent('.ping');
 check(/\d+ ms/.test(pingText), `HUD shows ping "${pingText}"`);
+// Quick-chat wheel: hold T, flick up (first item), release
+await page.keyboard.down('KeyT');
+await sleep(100);
+await page.mouse.move(640, 400);
+await page.mouse.move(640, 300, { steps: 5 });
+await sleep(100);
+await page.keyboard.up('KeyT');
+await page.waitForSelector('.chatfeed .cm', { timeout: 3000 }).catch(() => {});
+const chat = await page.textContent('.chatfeed').catch(() => '');
+check(/Nice shot!/.test(chat), `quick-chat wheel sent "${chat.trim()}"`);
 // Hunt the bot: aim at it every frame and fire with F
 let hits = 0;
 await page.exposeFunction('__hit', () => { hits++; });

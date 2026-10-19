@@ -379,6 +379,12 @@ export class OnlineMatch {
     return (this.lastRemotes || []).find((e) => e.id === id) || null;
   }
 
+  /** Teammates get a name tag. */
+  teamTag(e) {
+    if (!this.teams || e.team !== this.myTeam) return null;
+    return { name: this.playerName(e.id), color: e.team === 0 ? '#ffb27a' : '#8fd3ff' };
+  }
+
   playerName(id) { return this.room.players.find((p) => p.id === id)?.name ?? '?'; }
   playerTeam(id) { return this.teams ? this.room.players.find((p) => p.id === id)?.team : (id === this.myId ? 0 : 1); }
 

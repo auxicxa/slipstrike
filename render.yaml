@@ -1,0 +1,12 @@
+# Render blueprint: New → Blueprint → pick this repo. (Or create a Web Service by hand with the same commands.)
+services:
+  - type: web
+    name: slipstrike
+    runtime: node
+    plan: free
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_VERSION
+        value: "22"

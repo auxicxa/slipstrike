@@ -41,6 +41,7 @@ export class Menus {
     const nameIn = h('input.field.grow', { maxLength: 16, placeholder: 'Nickname', value: settings.get('name') || '' });
     const codeIn = h('input.field.code-field', { maxLength: 4, placeholder: 'CODE' });
     const errEl = h('div.err', err);
+    const practiceMap = h('select.field', { title: 'Practice map' }, ...Object.values(MAPS).map((m) => h('option', { value: m.id }, m.name)));
     const getName = () => {
       const n = nameIn.value.trim();
       if (!n) { errEl.textContent = 'Pick a nickname first.'; nameIn.focus(); return null; }
@@ -65,7 +66,9 @@ export class Menus {
           codeIn,
           h('button.btn', { on: { click: join } }, 'Join'),
         ),
-        h('button.btn', { on: { click: () => { sfx.unlock(); this.app.startPractice(); } } }, 'Practice Range (offline)'),
+        h('div.row', { style: { margin: 0 } },
+          h('button.btn.grow', { on: { click: () => { sfx.unlock(); this.app.startPractice({ mapId: practiceMap.value }); } } }, 'Practice Range (offline)'),
+          practiceMap),
         h('button.btn', { on: { click: () => this.settings(() => this.title()) } }, 'Settings & Controls'),
       ),
       errEl,
