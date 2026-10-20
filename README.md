@@ -178,6 +178,12 @@ lands on the ground and is mirrored fairly. Collision is AABB plus ramps. A wall
 - **Lag compensation:** the server keeps 1 s of position history. A shot is checked against targets where the shooter saw
   them (the client's interpolated "view tick"). The rewind is capped at the 100 ms interpolation delay **plus 150 ms of
   latency**: beyond that, high-ping players have to lead their shots.
+- **Smooth round starts:** phases end on exact server ticks. Shortly before the freeze ends, the server tells each
+  client which of its inputs will be the first unfrozen one, and both sides use that rule. So the moment a round goes
+  live, you start moving with no snap-back, whatever your ping. A client can't use this to leave spawn early: an input
+  can unfreeze at most 10 ticks before the freeze ends.
+- **Even input timing:** the server runs one input per tick, with a catch-up to two per tick when a low-FPS client's
+  bursts pile up. That keeps each player's input-to-tick timing predictable.
 - **Anti-abuse:** messages are size-limited (4 KB), schema-validated and rate-limited. A token bucket means a client can't
   move faster than 60 inputs/s. Repeated bad messages get the client disconnected. Malformed input never crashes the server.
 - **Reconnects:** a session token (in `sessionStorage`) lets a dropped player rejoin the same slot within 30 s.
@@ -200,7 +206,14 @@ npm run bot -- --count 2 --mode 1v1 --assert --chaos       # random disconnects/
 npm run bot -- --count 5 --mode ffa --assert
 npm run bot -- --count 3 --code ABCD                       # fill YOUR room with bots to play against
 npm run bot -- --count 2 --fuzz                            # flood junk; the server should kick, not crash
+npm run bot -- --count 5 --code ABCD --roles hunter,passive,hunter,passive,hunter
 ```
+
+`--roles` gives each bot a fixed behaviour, in join order. Bots then join one at a time, so with you in the room first,
+the teams alternate enemy, teammate, enemy… The roles:
+- `hunter`: perfect aim, always heads for the nearest enemy.
+- `walker`: heads for you but never shoots, so it's an easy moving target.
+- `passive`: crouches in spawn and never shoots, so it's a teammate who stays alive.
 
 `--assert` checks that a team reached 5 wins, that the round count matches the score, that sides swapped at
 halftime, and that kill/death totals are consistent. It also reads the server tick timings from `/stats`.
@@ -217,8 +230,10 @@ npm run e2e                  # set CHROMIUM_PATH=/path/to/chrome if needed
 ```
 
 They cover the practice movement, firing with F, the keybind menu (rebind, conflicts, persistence, reset), ADS hold/toggle,
-keyboard look, online 1v1 against a bot (prediction errors, ping, quick-chat, server-confirmed hits), reconnect
-mid-match, the 2v2 flow (loadout, scoreboard, results, back to lobby) and 3v3 spectating.
+keyboard look, online 1v1 against a bot (prediction errors, ping, quick-chat, server-confirmed hits), the round start
+(no correction when the round goes live: run the server with `FAKE_LAG_MS=60 FAKE_JITTER_MS=15` to make it meaningful),
+reconnect mid-match, the 2v2 flow (loadout, scoreboard, spectating, results, back to lobby), 3v3 spectating, and the
+automatic graphics fallback. The bots use `--roles`, so the checks are deterministic.
 
 `GET /stats` returns rooms, connections and server tick timings. `GET /healthz` is the health check.
 
@@ -255,7 +270,10 @@ e2e/               browser checks (Playwright)
 - **Round timer:** 90 s; 8 s freeze/loadout before round 1 and 6 s before later rounds; tie-break by players alive, then total health.
 - **Practice is offline** (runs the same simulation in the browser), so it works even when the server is unreachable.
 - **Graphics quality:** Medium (default) renders at 1× pixel ratio. That's the key to holding 60 FPS on Retina MacBooks. High uses the full
-  Retina resolution with antialiasing. Low renders at 0.75× with fewer particles.
+  Retina resolution with antialiasing. Low renders at 0.75× with fewer particles. **Auto quality** (on by default) steps
+  down one level if the game stays below 50 FPS for a few seconds, and says so on screen. It never raises the quality
+  again by itself. While you're playing, a step down from High only lowers the resolution, so your pointer lock isn't
+  dropped; antialiasing follows the next time you open the menus.
 - Teammates get name tags (visible through walls). Enemies don't.
 
 ## Known limitations / not yet verified
@@ -264,7 +282,8 @@ e2e/               browser checks (Playwright)
   only exercised in headless Chromium. Try the trackpad options and tell us what feels off.
 - **60 FPS on school hardware is not measured.** The automated browser uses software rendering (~10 FPS). Only the budgets
   were checked: ~20-60 draw calls and under 2k triangles per frame. Use the ` overlay on a real MacBook.
-- **Deploys to Render, Railway and Fly were not performed** (no accounts here), and the Docker image wasn't built (no Docker daemon). The same
-  production build (`npm ci && npm run build && npm start`) was verified locally from a clean checkout.
+- **Deploys to Render, Railway and Fly were not performed** (no accounts here). Both the production build
+  (`npm ci && npm run build && npm start`, from a clean checkout) and the Docker image (`docker build` + `docker run`, with a
+  full bot match and the browser online check played through the container) were verified locally.
 - **Real school networks / proxies** were not tested. If WebSockets are blocked, the menu shows a clear error.
 - **One server process only** (rooms are in memory). Fine for a class; not built to scale across machines.
