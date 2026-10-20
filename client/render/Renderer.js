@@ -37,7 +37,10 @@ export class Renderer {
   createRenderer() {
     const q = settings.get('quality');
     const cfg = QUALITY[q] || QUALITY.med;
-    if (this.renderer && this.quality && QUALITY[this.quality].aa === cfg.aa) {
+    // Switching antialiasing needs a new WebGL context (a new canvas), which would drop pointer lock
+    // mid-game. While playing, only the resolution changes; antialiasing follows on the next menu visit.
+    const keepContext = this.renderer && document.pointerLockElement;
+    if (this.renderer && this.quality && (QUALITY[this.quality].aa === cfg.aa || keepContext)) {
       this.quality = q;
       this.resize();
       return;

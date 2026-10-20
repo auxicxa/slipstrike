@@ -205,6 +205,7 @@ export class Game {
     this.frameTimes.push(dt);
     if (this.frameTimes.length > 60) this.frameTimes.shift();
     if (!this.session) return;
+    this.autoQuality(dt);
 
     const s = this.session;
     const localBefore = s.localPlayer?.();
@@ -244,6 +245,29 @@ export class Game {
     this.fx.update(dt);
     this.r.render(showVm);
     this.hud.update(dt, view, ws, spec);
+  }
+
+  /**
+   * If the game runs below ~50 FPS for 4 s (after a 3 s warm-up, while actually playing), lower the
+   * graphics quality one step. Never raises it again on its own.
+   */
+  autoQuality(dt) {
+    const a = this.autoQ || (this.autoQ = { warm: 0, sum: 0, n: 0, cooldown: 0 });
+    const testing = input.noLock && !new URLSearchParams(location.search).has('autoq');
+    if (!settings.get('autoQuality') || testing || this.paused || !this.running) { a.warm = 0; a.sum = 0; a.n = 0; return; }
+    a.cooldown -= dt;
+    a.warm += dt;
+    if (a.warm < 3) return;
+    a.sum += dt; a.n++;
+    if (a.sum < 4) return;
+    const fps = a.n / a.sum;
+    a.sum = 0; a.n = 0;
+    if (fps >= 50 || a.cooldown > 0) return;
+    const next = { high: 'med', med: 'low' }[settings.get('quality')];
+    if (!next) return;
+    settings.set('quality', next);
+    a.cooldown = 10; a.warm = 0;
+    this.onToast?.(`Running at ${fps.toFixed(0)} FPS: lowered graphics to ${next === 'med' ? 'Medium' : 'Low'} (Settings → Video)`);
   }
 
   updateCamera(dt, v, ws) {

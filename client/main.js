@@ -45,6 +45,7 @@ const app = {
 };
 
 menus = new Menus(app);
+game.onToast = (msg) => menus.toast(msg, 5000);
 
 function showPause(first = false) {
   menus.pause({

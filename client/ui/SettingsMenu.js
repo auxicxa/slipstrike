@@ -101,6 +101,7 @@ function videoTab() {
   return h('div', grid(
     slider('fov', 'Field of view', 70, 115, 1, (v) => v + '°'),
     segmented('quality', 'Graphics quality', [['low', 'Low'], ['med', 'Medium'], ['high', 'High']]),
+    toggle('autoQuality', 'Lower quality automatically if the game runs slowly', null, 'Steps down one level when the game stays below 50 FPS.'),
     toggle('showFps', 'Show performance overlay', null, 'Also bound to the ` key.'),
   ), h('div.hint', { style: { marginTop: '12px' } }, 'Medium renders at 1× pixel ratio. That is the best balance on school MacBooks. High renders at Retina resolution with antialiasing.'));
 }

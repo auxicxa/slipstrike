@@ -17,6 +17,7 @@ export const DEFAULT_SETTINGS = {
   // Video
   fov: 90,
   quality: 'med',       // 'low' | 'med' | 'high'
+  autoQuality: true,    // step quality down automatically if the game runs below ~50 FPS
   showFps: false,
   // Audio
   volume: 0.7,

@@ -1,7 +1,7 @@
 // Runs every end-to-end check in sequence against a running server (npm run dev or npm start).
 // Start the server with FAST_ROUNDS=1 so the match tests finish quickly.
 import { spawnSync } from 'node:child_process';
-const tests = ['practice', 'combat', 'settings', 'online', 'roundstart', 'reconnect', 'match', 'spectate'];
+const tests = ['practice', 'combat', 'settings', 'online', 'roundstart', 'reconnect', 'match', 'spectate', 'autoquality'];
 let failed = 0;
 for (const t of tests) {
   const r = spawnSync('node', [`e2e/${t}.mjs`], { stdio: 'inherit' });
