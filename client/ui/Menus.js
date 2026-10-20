@@ -11,6 +11,8 @@ import { WEAPONS, PRIMARIES, SECONDARIES } from '../../shared/config/weapons.js'
 
 // Practice-only build (VITE_OFFLINE=1), e.g. for hosts that can't run the game server
 const OFFLINE = import.meta.env.VITE_OFFLINE === '1';
+// claude.ai build: multiplayer runs in the room creator's browser (see client/net/RoomNet.js)
+const ROOM_MODE = import.meta.env.VITE_ROOM === '1' || new URLSearchParams(location.search).has('localroom');
 
 export class Menus {
   constructor(app) {
@@ -74,6 +76,7 @@ export class Menus {
         h('div.row', { style: { margin: 0 } },
           h('button.btn.grow' + (OFFLINE ? '.primary.big' : ''), { on: { click: () => { sfx.unlock(); this.app.startPractice({ mapId: practiceMap.value }); } } }, OFFLINE ? 'Play practice' : 'Practice Range (offline)'),
           practiceMap),
+        ROOM_MODE ? h('div.hint', 'Everyone who plays needs to be signed in to claude.ai, with this page shared to them. Whoever creates a room hosts the match in their browser.') : null,
         OFFLINE ? h('div.hint', 'This is the single-player practice version: every map, every weapon, target dummies. Multiplayer (1v1, 2v2, 3v3, free-for-all) runs on the full version with its game server.') : null,
         h('button.btn', { on: { click: () => this.settings(() => this.title()) } }, 'Settings & Controls'),
       ),
@@ -165,6 +168,7 @@ export class Menus {
         h('button.btn.big.grow' + (me?.ready ? '' : '.primary'), { on: { click: () => act.ready(!me?.ready) } }, me?.ready ? 'Not ready' : 'Ready'),
       ),
       status,
+      act.hosting?.() ? h('div.hint', { style: { color: 'var(--accent)' } }, 'You are hosting: the match runs in this tab. Keep it open and in front, or the game stops for everyone.') : null,
       h('div.hint', 'First to 5 rounds. No respawns mid-round. Sides swap at halftime. Free-for-all has instant respawns.'),
     ));
     this.mount('lobby', el);

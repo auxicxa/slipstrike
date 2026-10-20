@@ -153,14 +153,15 @@ export class OnlineMatch {
     if (m.ph !== this.phase) this.phase = m.ph;
     this.phaseT = m.pt;
     this.phaseEnd = m.pe ?? 0;
-    this.liveSeq = m.ls ?? null;
+    if (!m.partial) this.liveSeq = m.ls ?? null;
     if (m.ack >= 0) {
       this.seqOffs.push(m.k - m.ack);
       if (this.seqOffs.length > 9) this.seqOffs.shift();
     }
     this.phaseAt = now;
 
-    // Local player: new life (spawn) → hard reset, otherwise reconcile
+    // Local player: new life (spawn) → hard reset, otherwise reconcile. A "partial" snapshot (claude.ai
+    // rooms, where the host rotates players' private states through a small budget) has no own state.
     if (m.ms) {
       if (m.life !== this.life || !this.ready) {
         this.life = m.life;
@@ -176,7 +177,7 @@ export class OnlineMatch {
       } else this.reconcile(m);
       this.me.alive = true;
       this.me.hp = m.hp;
-    } else {
+    } else if (!m.partial) {
       this.me.alive = false;
       this.history = this.history.filter((h) => h.inp.s > m.ack);
     }

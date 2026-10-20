@@ -14,7 +14,8 @@
     "test": "node --test test/*.test.js",
     "bot": "node scripts/bot.js",
     "e2e": "node e2e/run.mjs",
-    "build:practice": "node scripts/build-artifact.mjs"
+    "build:practice": "node scripts/build-artifact.mjs --offline",
+    "build:claude": "node scripts/build-artifact.mjs"
   },
   "dependencies": {
     "express": "^5.1.0",

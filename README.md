@@ -37,7 +37,25 @@ npm run build      # builds the client into dist/
 npm start          # serves dist/ + the game socket on $PORT (default 3000)
 ```
 
-## Playing on a LAN (same Wi-Fi)
+## Playing on claude.ai (works where game hosts are blocked)
+
+`npm run build:claude` builds the whole game as one self-contained page (`dist-claude/slipstrike.html`) to
+publish as a claude.ai page with the `room` capability. There is no game server: **whoever creates a room
+hosts the match in their own browser** (the same match code as `server/Room.js`), and players exchange
+inputs and snapshots through the page's real-time room connection.
+- Everyone must be signed in to claude.ai, with the page shared to them (Share button). Signed-out or
+  public-link visitors can only play Practice.
+- The host must keep their tab open and in front. If they leave, the match ends for everyone.
+- The connection carries at most 4 KB per update about 30 times a second, so the host rotates each player's
+  own state through that budget and drops old effects first. A full 3v3 fits (tested: largest update ~3.9 KB).
+- `npm run build:practice` builds a practice-only page instead.
+
+To develop and test this mode locally without claude.ai, add `?localroom` (or `?localroom=80` for 80 ms of
+simulated latency) to the URL: tabs of the same browser then talk through a stand-in with the same rules.
+`e2e/claude-room.mjs` plays a full 1v1 match between two tabs this way, and `test/roomnet.test.js` runs a
+3v3 lobby and match in Node.
+
+
 
 1. On the host computer run `npm run build && npm start` (or `npm run dev`).
 2. The server prints addresses like `LAN: http://192.168.1.23:3000`. Everyone on the same network opens that address.

@@ -4,10 +4,19 @@ import { Menus } from './ui/Menus.js';
 import { input } from './core/Input.js';
 import { OfflinePractice } from './modes/OfflinePractice.js';
 import { OnlineMatch } from './modes/OnlineMatch.js';
-import { net } from './net/Net.js';
+import { net as wsNet } from './net/Net.js';
+import { RoomNet } from './net/RoomNet.js';
 import { C, S } from '../shared/net/protocol.js';
 import { sanitizeLoadout } from '../shared/config/weapons.js';
 import { settings } from './core/Settings.js';
+import { ROUND } from '../shared/config/game.js';
+
+// Builds for claude.ai pages (VITE_ROOM=1, or ?localroom for local testing) have no game server: the
+// player who creates a game hosts it in their browser, over the page's room connection.
+const params = new URLSearchParams(location.search);
+const ROOM_MODE = import.meta.env.VITE_ROOM === '1' || params.has('localroom');
+const net = ROOM_MODE ? new RoomNet() : wsNet;
+if (params.has('fastrounds')) Object.assign(ROUND, { freezeTime: 3, roundTime: 40, roundEndTime: 1.5, halftimeExtra: 1, matchEndTime: 4, countdown: 1 });
 
 const game = new Game(document.getElementById('app'));
 let menus;
@@ -30,8 +39,8 @@ const app = {
     try {
       await net.connect(name);
       fn();
-    } catch {
-      menus.title('Could not reach the game server. Check your connection (school networks sometimes block WebSockets) and try again.');
+    } catch (e) {
+      menus.title(e?.userMessage || 'Could not reach the game server. Check your connection (school networks sometimes block WebSockets) and try again.');
     }
   },
   quickPlay(name) { this.connectThen(name, () => net.send({ t: C.QUICK })); },
@@ -71,6 +80,7 @@ const lobbyActions = {
     net.send({ t: C.LOADOUT, p, s });
   },
   leave: () => leaveOnline(true),
+  hosting: () => !!net.host,
   settings: () => menus.settings(() => { if (room) menus.lobby(room, net.id, lobbyActions); else menus.title(); }),
 };
 
