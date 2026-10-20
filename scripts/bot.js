@@ -9,6 +9,7 @@
 //
 // Options: --url ws://localhost:3000/ws  --count N  --mode 1v1|2v2|3v3|ffa  --map ID  --code XXXX
 //          --quick  --duration SEC  --assert  --chaos  --fuzz  --skill 0..1  --rooms N  --quiet
+//          --roles hunter,passive,...   (per-bot behaviour, in join order)
 import WebSocket from 'ws';
 import { CollisionWorld } from '../shared/sim/collision.js';
 import { MAPS } from '../shared/maps/index.js';
@@ -37,6 +38,11 @@ const FUZZ = !!opt('fuzz', false);
 const SKILL = Number(opt('skill', 0.6));
 const ROOMS = Number(opt('rooms', 1));
 const QUIET = !!opt('quiet', false);
+// --roles hunter,passive,...: per-bot behaviour in join order (bots then join one at a time, so team
+// auto-balance is predictable). passive = crouches in spawn and never shoots; hunter = perfect aim,
+// always heads for the nearest enemy; walker = heads for the nearest enemy but never shoots.
+// Bots without a role play normally.
+const ROLES = typeof opt('roles', '') === 'string' ? opt('roles', '').split(',').filter(Boolean) : [];
 
 const log = (...a) => { if (!QUIET) console.log(...a); };
 const failures = [];
@@ -64,6 +70,7 @@ class Bot {
     this.connected = false;
     this.reconnects = 0;
     this.closedOnPurpose = false;
+    this.role = ROLES[i] || 'normal';
   }
 
   connect() {
@@ -136,7 +143,11 @@ class Bot {
   step(coll) {
     if (!this.connected || !this.room || this.room.phase === 'lobby' || this.room.phase === 'countdown') return;
     let b = 0, w = 0;
-    if (this.alive && this.me) {
+    if (this.role === 'passive') {
+      b = this.alive ? BTN.CROUCH : 0;
+    } else if (this.alive && this.me) {
+      const hunter = this.role === 'hunter' || this.role === 'walker';
+      const skill = hunter ? 1 : SKILL;
       const me = this.me;
       const eye = [me.x, me.y + me.eye, me.z];
       const teams = this.room.mode !== 'ffa';
@@ -152,6 +163,16 @@ class Bot {
         const wall = coll.raycast(eye[0], eye[1], eye[2], dx / d, dy / d, dz / d, d);
         if (wall !== Infinity) continue;
         target = { x, y: y + h * 0.65, z, d }; td = d;
+      }
+      // Hunters head for the nearest living enemy even without line of sight
+      let chase = null;
+      if (hunter && !target) {
+        let cd = Infinity;
+        for (const [id, x, , z, , , , flags] of this.ents) {
+          if (id === this.id || !(flags & 4) || (teams && this.teamOf(id) === myTeam)) continue;
+          const d = Math.hypot(x - me.x, z - me.z);
+          if (d < cd) { cd = d; chase = { x, z }; }
+        }
       }
       // Movement: forward + periodic strafes, jumps, slides and dashes
       this.strafeT -= 1 / 60;
@@ -169,20 +190,21 @@ class Bot {
       if (this.stuckT > 0.6) { this.wanderYaw += Math.PI * (0.5 + Math.random()); this.stuckT = 0; b |= BTN.JUMP; }
       if (Math.random() < 0.005) this.wanderYaw += (Math.random() - 0.5) * 2;
       let goalYaw = this.wanderYaw, goalPitch = 0;
+      if (chase && this.stuckT === 0) goalYaw = Math.atan2(-(chase.x - me.x), -(chase.z - me.z));
       if (target) {
         const dx = target.x - eye[0], dz = target.z - eye[2];
         goalYaw = Math.atan2(-dx, -dz);
         goalPitch = Math.atan2(target.y - eye[1], Math.hypot(dx, dz));
-        const noise = (1 - SKILL) * 0.08;
+        const noise = (1 - skill) * 0.08;
         goalYaw += (Math.random() - 0.5) * noise;
         goalPitch += (Math.random() - 0.5) * noise;
         if (target.d < 25 && Math.random() < 0.5) b &= ~BTN.FWD; // stop and shoot a bit
       }
       const dyaw = Math.atan2(Math.sin(goalYaw - this.yaw), Math.cos(goalYaw - this.yaw));
-      this.yaw += dyaw * (target ? 0.25 + SKILL * 0.3 : 0.08);
+      this.yaw += dyaw * (target ? 0.25 + skill * 0.3 : hunter ? 0.2 : 0.08);
       this.pitch += (goalPitch - this.pitch) * 0.3;
-      if (target && Math.abs(dyaw) < 0.08) b |= BTN.FIRE;
-      if (Math.random() < 0.003) w = 1 + Math.floor(Math.random() * 3);
+      if (target && Math.abs(dyaw) < 0.08 && this.role !== 'walker') b |= BTN.FIRE;
+      if (!hunter && Math.random() < 0.003) w = 1 + Math.floor(Math.random() * 3);
       if (Math.random() < 0.002) b |= BTN.RELOAD;
     }
     this.seq++;
@@ -241,8 +263,12 @@ class Group {
       this.code = r.code;
       log(`[room ${r.code}] ${bot.name} joined (${QUICK ? 'quick play' : CODE ? 'join' : 'created'})`);
       if (!CODE && !QUICK && r.host === bot.id) bot.send({ t: C.SET_MODE, mode: MODE, map: MAP });
-      // Bring in the rest
-      for (const other of this.bots.slice(1)) setTimeout(() => other.connect(), 100 + Math.random() * 300);
+      // Bring in the rest (one at a time when roles are used, so team assignment is predictable)
+      if (!ROLES.length) for (const other of this.bots.slice(1)) setTimeout(() => other.connect(), 100 + Math.random() * 300);
+    }
+    if (ROLES.length) {
+      const next = this.bots[this.bots.indexOf(bot) + 1];
+      if (next) setTimeout(() => next.connect(), 150);
     }
   }
 

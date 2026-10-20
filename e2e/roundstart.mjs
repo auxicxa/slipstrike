@@ -11,7 +11,7 @@ await page.fill('input[placeholder="Nickname"]', 'Starter');
 await page.click('text=Create Room');
 await page.waitForSelector('.lobby-code');
 const code = (await page.textContent('.lobby-code')).trim();
-const bot = spawn('node', ['scripts/bot.js', '--url', WS_URL, '--count', '1', '--code', code, '--duration', '60', '--quiet', ...(process.env.BOT_ROLE ? ['--roles', process.env.BOT_ROLE] : ['--skill', '0'])], { stdio: 'ignore' });
+const bot = spawn('node', ['scripts/bot.js', '--url', WS_URL, '--count', '1', '--code', code, '--duration', '60', '--quiet', '--roles', 'passive'], { stdio: 'ignore' });
 await page.waitForFunction(() => window.__slip.room?.players.length === 2, null, { timeout: 8000 });
 await page.click('button:text-is("Ready")');
 await page.waitForFunction(() => window.__slip.online?.ready && window.__slip.online.phase === 'freeze', null, { timeout: 15000 });

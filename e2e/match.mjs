@@ -14,7 +14,7 @@ await page.waitForFunction(() => window.__slip.room?.mode === '2v2');
 await page.selectOption('select.field', 'kiln'); // compact map: the bots find us quickly
 await page.waitForFunction(() => window.__slip.room?.map === 'kiln');
 const code = (await page.textContent('.lobby-code')).trim();
-const bots = spawn('node', ['scripts/bot.js', '--url', WS_URL, '--count', '3', '--code', code, '--duration', '300', '--quiet', '--skill', '0.9'], { stdio: 'ignore' });
+const bots = spawn('node', ['scripts/bot.js', '--url', WS_URL, '--count', '3', '--code', code, '--duration', '300', '--quiet', '--roles', 'hunter,passive,hunter'], { stdio: 'ignore' });
 await page.waitForFunction(() => window.__slip.room?.players.length === 4, null, { timeout: 10000 });
 check(true, 'mode set to 2v2 and 3 bots joined');
 const teams = await page.evaluate(() => window.__slip.room.players.map((p) => p.team).sort().join(''));
@@ -44,12 +44,11 @@ for (let i = 0; i < 5 && !died; i++) {
 check(died, 'local player was eliminated');
 if (died) {
   await sleep(300);
-  const spec = await page.evaluate(() => { const v = window.__slip.online.spectateView(); return v ? v.name : null; });
-  const label = await page.textContent('.spectate').catch(() => '');
-  if (spec) {
-    check(/Spectating/.test(label), `spectating teammate "${spec}" (${label.trim()})`);
-    await page.screenshot({ path: 'e2e/out/spectate.png' });
-  } else console.log('  ~ no living teammate to spectate (round ended); label:', label.trim());
+  // Our teammate is a passive bot hiding in spawn, so there is always someone to watch
+  const spec = await page.evaluate(() => window.__slip.online.spectateView()?.name ?? null);
+  const label = (await page.textContent('.spectate').catch(() => '')).trim();
+  check(spec && /Spectating/.test(label), `spectating teammate "${spec}" (${label})`);
+  await page.screenshot({ path: 'e2e/out/spectate.png' });
 }
 // Play out the match (bots finish it; FAST_ROUNDS keeps it short)
 await page.waitForSelector('.results', { timeout: 240000 });

@@ -12,7 +12,7 @@ await page.click('text=Create Room');
 await page.waitForSelector('.lobby-code', { timeout: 8000 });
 const code = (await page.textContent('.lobby-code')).trim();
 check(/^[A-Z]{4}$/.test(code), `room created with code ${code}`);
-const bot = spawn('node', ['scripts/bot.js', '--url', WS_URL, '--count', '1', '--code', code, '--duration', '90', '--quiet', '--skill', '0.2'], { stdio: 'inherit' });
+const bot = spawn('node', ['scripts/bot.js', '--url', WS_URL, '--count', '1', '--code', code, '--duration', '90', '--quiet', '--roles', 'walker'], { stdio: 'inherit' });
 await page.waitForFunction(() => window.__slip.room?.players.length === 2, null, { timeout: 8000 });
 check(true, 'bot joined the room');
 await page.click('button:has-text("Ready")');
@@ -36,7 +36,7 @@ const b = await snapInfo();
 check(Math.hypot(b.x - a.x, b.z - a.z) > 3, `local player moved ${Math.hypot(b.x - a.x, b.z - a.z).toFixed(1)} m`);
 console.log(`    corrections during movement: ${b.corrections - a.corrections} (last size ${b.last.toFixed(4)} m), unacked inputs: ${b.hist}, ping ${b.ping.toFixed(0)} ms`);
 check(b.last < 0.25, 'prediction errors stay small');
-check(b.remotes === 1, 'remote player visible (interpolated)');
+check(b.remotes === 1, 'remote player present (interpolated)');
 const pingText = await page.textContent('.ping');
 check(/\d+ ms/.test(pingText), `HUD shows ping "${pingText}"`);
 // Quick-chat wheel: hold T, flick up (first item), release
@@ -59,7 +59,7 @@ await page.evaluate(() => {
   window.__aimer = setInterval(() => {
     const o = window.__slip.online; if (!o || !o.me.alive) return;
     const t = (o.lastRemotes || []).find((e) => e.alive); if (!t) return;
-    const me = o.me.ms; const dx = t.x - me.x, dz = t.z - me.z, dy = t.y + 1.15 - (me.y + me.eye);
+    const me = o.me.ms; const dx = t.x - me.x, dz = t.z - me.z, dy = t.y + t.h * 0.6 - (me.y + me.eye);
     g.yaw = Math.atan2(-dx, -dz) + o.me.ws.recY; g.pitch = Math.atan2(dy, Math.hypot(dx, dz)) - o.me.ws.recP;
   }, 16);
 });
