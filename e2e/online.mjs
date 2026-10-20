@@ -1,7 +1,7 @@
 // Phase 3: browser client vs a bot in a 1v1 room, through the real server.
 // Checks: lobby flow, match start, prediction corrections, remote interpolation, ping, server-confirmed hits.
 import { spawn } from 'node:child_process';
-import { launch, openPage, sleep, check } from './lib.mjs';
+import { launch, openPage, sleep, check, WS_URL } from './lib.mjs';
 
 const label = process.argv[2] || 'no added lag';
 const browser = await launch();
@@ -12,7 +12,7 @@ await page.click('text=Create Room');
 await page.waitForSelector('.lobby-code', { timeout: 8000 });
 const code = (await page.textContent('.lobby-code')).trim();
 check(/^[A-Z]{4}$/.test(code), `room created with code ${code}`);
-const bot = spawn('node', ['scripts/bot.js', '--count', '1', '--code', code, '--duration', '90', '--quiet', '--skill', '0.2'], { stdio: 'inherit' });
+const bot = spawn('node', ['scripts/bot.js', '--url', WS_URL, '--count', '1', '--code', code, '--duration', '90', '--quiet', '--skill', '0.2'], { stdio: 'inherit' });
 await page.waitForFunction(() => window.__slip.room?.players.length === 2, null, { timeout: 8000 });
 check(true, 'bot joined the room');
 await page.click('button:has-text("Ready")');

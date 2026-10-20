@@ -36,3 +36,4 @@ export async function hold(page, key, ms) {
   await sleep(ms);
   await page.keyboard.up(key);
 }
+export const WS_URL = BASE.replace(/^http/, 'ws') + '/ws';

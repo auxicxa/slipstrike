@@ -1,5 +1,5 @@
 // Phase 5: keybind menu (rebind, conflict, persistence, reset), ADS hold/toggle, keyboard look, settings persistence.
-import { launch, openPage, sleep, check } from './lib.mjs';
+import { launch, openPage, sleep, check, WS_URL } from './lib.mjs';
 
 const browser = await launch();
 const { page, errors } = await openPage(browser);

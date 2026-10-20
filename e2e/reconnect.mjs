@@ -1,6 +1,6 @@
 // Phase 3: drop the browser's socket mid-match and check it reconnects into the same slot.
 import { spawn } from 'node:child_process';
-import { launch, openPage, sleep, check } from './lib.mjs';
+import { launch, openPage, sleep, check, WS_URL } from './lib.mjs';
 
 const browser = await launch();
 const { page, errors } = await openPage(browser);
@@ -9,7 +9,7 @@ await page.fill('input[placeholder="Nickname"]', 'Reconnector');
 await page.click('text=Create Room');
 await page.waitForSelector('.lobby-code');
 const code = (await page.textContent('.lobby-code')).trim();
-const bot = spawn('node', ['scripts/bot.js', '--count', '1', '--code', code, '--duration', '60', '--quiet', '--skill', '0'], { stdio: 'ignore' });
+const bot = spawn('node', ['scripts/bot.js', '--url', WS_URL, '--count', '1', '--code', code, '--duration', '60', '--quiet', '--skill', '0'], { stdio: 'ignore' });
 await page.waitForFunction(() => window.__slip.room?.players.length === 2, null, { timeout: 8000 });
 await page.click('button:has-text("Ready")');
 await page.waitForFunction(() => window.__slip.online?.ready, null, { timeout: 15000 });

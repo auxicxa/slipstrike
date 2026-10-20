@@ -3,10 +3,11 @@ import { World } from '../shared/sim/world.js';
 import { MOVE_KEYS } from '../shared/sim/movement.js';
 import { WEAPON_KEYS, createWeaponState } from '../shared/sim/weapons.js';
 import { MAPS, MATCH_MAPS } from '../shared/maps/index.js';
-import { MODES, ROUND, FFA, DT, SNAPSHOT_EVERY, MAX_HP, RECONNECT_GRACE } from '../shared/config/game.js';
+import { MODES, ROUND, FFA, DT, TICK_RATE, SNAPSHOT_EVERY, MAX_HP, RECONNECT_GRACE } from '../shared/config/game.js';
 import { sanitizeLoadout, DEFAULT_LOADOUT } from '../shared/config/weapons.js';
 import { S } from '../shared/net/protocol.js';
 import { LagComp } from './LagComp.js';
+import { LIVE_SEQ_LEAD, LIVE_SEQ_EARLIEST } from '../shared/net/phase.js';
 
 export const WEAPON_IDS = ['rifle', 'shotgun', 'sniper', 'pistol', 'revolver', 'knife'];
 /** Drop queued inputs but acknowledge them, so the client doesn't replay inputs we never ran. */
@@ -28,7 +29,7 @@ export class Room {
     this.mode = pub ? '2v2' : '1v1';
     this.mapId = MODES[this.mode].map;
     this.phase = 'lobby';
-    this.phaseT = 0;
+    this.phaseEndTick = 0; // phases end on exact ticks so clients can predict the freeze → live switch
     this.slots = new Map(); // id → slot
     this.world = null;
     this.lag = new LagComp();
@@ -57,7 +58,7 @@ export class Room {
     const slot = {
       id: conn.id, name: conn.name, conn, team, ready: false, loadout: { ...DEFAULT_LOADOUT },
       inputs: [], lastSeq: -1, lastQueued: -1, budget: 2, disc: false, discAt: 0,
-      fxAcc: 0, chatT: 0, respawnT: 0, life: 0, ping: 0, ent: null,
+      fxAcc: 0, chatT: 0, respawnT: 0, life: 0, ping: 0, ent: null, liveSeq: null, liveTickMin: 0,
     };
     this.slots.set(conn.id, slot);
     conn.room = this;
@@ -208,9 +209,12 @@ export class Room {
   err(conn, msg) { conn.send({ t: S.ERROR, msg }); }
 
   // ------------------------------------------------------------------ phases
+  /** Seconds left in the current phase. */
+  get phaseT() { return Math.max(0, (this.phaseEndTick - this.tick) / TICK_RATE); }
+
   setPhase(p, t) {
     this.phase = p;
-    this.phaseT = t;
+    this.phaseEndTick = this.tick + Math.round(t * TICK_RATE);
     this.dirty = true;
   }
 
@@ -262,6 +266,7 @@ export class Room {
       s.ent.loadout = s.loadout;
       this.world.spawnPlayer(s.ent, sp);
       s.life++;
+      s.liveSeq = null;
       flushInputs(s);
     }
     this.lag.clear();
@@ -352,10 +357,8 @@ export class Room {
     } else if (this.phase === 'countdown') {
       if (!this.canStart()) this.setPhase('lobby', 0);
       else {
-        const before = Math.ceil(this.phaseT);
-        this.phaseT -= DT;
-        if (Math.ceil(this.phaseT) !== before) this.dirty = true;
-        if (this.phaseT <= 0) this.startMatch();
+        if (this.tick % TICK_RATE === 0) this.dirty = true;
+        if (this.tick >= this.phaseEndTick) this.startMatch();
       }
     }
 
@@ -381,16 +384,29 @@ export class Room {
 
     for (const s of this.slots.values()) {
       const ent = s.ent;
-      // Token bucket: on average one input per tick (no speed hacks), with room for bursts from
-      // low-FPS clients that send several inputs per frame.
+      // One input per tick, so inputs run on evenly spaced ticks (clients predict that timing), with
+      // a catch-up to two per tick when a low-FPS client's bursts pile up. The token bucket keeps the
+      // average at one input per tick, so nobody can move faster than real time.
       s.budget = Math.min(s.budget + 1, 10);
       if (s.inputs.length > 30) s.inputs.splice(0, s.inputs.length - 10); // hopelessly behind: drop old inputs
-      while (s.inputs.length && s.budget >= 1) {
+      let take = s.inputs.length > 4 ? 2 : 1;
+      // Shortly before the freeze ends, pick this player's first unfrozen input (see shared/net/phase.js)
+      if (ph === 'freeze' && s.liveSeq === null && this.tick >= this.phaseEndTick - LIVE_SEQ_LEAD) {
+        s.liveSeq = s.lastSeq + (this.phaseEndTick + 1 - this.tick);
+        s.liveTickMin = this.phaseEndTick + 1 - LIVE_SEQ_EARLIEST;
+      }
+      while (take-- > 0 && s.inputs.length && s.budget >= 1) {
         const inp = s.inputs.shift();
         s.budget--;
         s.lastSeq = inp.s;
         if (!ent || !ent.alive) continue;
-        w.processInput(ent, inp, DT, { frozen, canFight });
+        let fr = frozen, cf = canFight;
+        if (s.liveSeq !== null && (ph === 'freeze' || ph === 'live')) {
+          // A client can't unfreeze itself early by skipping ahead in sequence numbers
+          fr = !(inp.s >= s.liveSeq && this.tick >= s.liveTickMin);
+          cf = !fr;
+        }
+        w.processInput(ent, inp, DT, { frozen: fr, canFight: cf });
         s.fxAcc |= ent.ms.fx;
       }
       if (!teams && ent) {
@@ -416,33 +432,34 @@ export class Room {
       if (e.e === 'kill') this.dirty = true;
     }
 
-    // Phase timers and win conditions
-    this.phaseT -= DT;
+    // Phase timers and win conditions. Inputs processed this tick used the phase at the start of the
+    // tick, so the first unfrozen inputs are the ones processed at tick phaseEndTick + 1.
+    const over = this.tick >= this.phaseEndTick;
     if (teams) {
-      if (ph === 'freeze' && this.phaseT <= 0) { this.setPhase('live', ROUND.roundTime); this.events.push({ e: 'go' }); }
+      if (ph === 'freeze' && over) { this.setPhase('live', ROUND.roundTime); this.events.push({ e: 'go' }); }
       else if (ph === 'live') {
         const alive = [0, 0], hp = [0, 0];
         for (const s of this.slots.values()) if (s.ent && s.ent.alive) { alive[s.team]++; hp[s.team] += s.ent.hp; }
         if (alive[0] === 0 || alive[1] === 0) this.endRound(alive[0] === 0 && alive[1] === 0 ? -1 : alive[0] === 0 ? 1 : 0);
-        else if (this.phaseT <= 0) {
+        else if (over) {
           let win = -1;
           if (alive[0] !== alive[1]) win = alive[0] > alive[1] ? 0 : 1;
           else if (Math.abs(hp[0] - hp[1]) >= 1) win = hp[0] > hp[1] ? 0 : 1;
           this.endRound(win);
         }
-      } else if (ph === 'roundEnd' && this.phaseT <= 0) {
+      } else if (ph === 'roundEnd' && over) {
         if (this.matchWinner !== null) this.endMatch(this.matchWinner);
         else {
           if (this.round === ROUND.halftimeAfter && !this.half) this.half = true;
           this.startRound();
         }
-      } else if (ph === 'matchEnd' && this.phaseT <= 0) this.backToLobby();
+      } else if (ph === 'matchEnd' && over) this.backToLobby();
     } else {
       if (ph === 'live') {
         let top = null;
         for (const s of this.slots.values()) if (s.ent && (!top || s.ent.kills > top.ent.kills)) top = s;
-        if ((top && top.ent.kills >= FFA.killLimit) || this.phaseT <= 0) this.endMatch(top ? top.id : -1);
-      } else if (ph === 'matchEnd' && this.phaseT <= 0) this.backToLobby();
+        if ((top && top.ent.kills >= FFA.killLimit) || over) this.endMatch(top ? top.id : -1);
+      } else if (ph === 'matchEnd' && over) this.backToLobby();
     }
   }
 
@@ -466,7 +483,8 @@ export class Room {
     for (const s of this.slots.values()) {
       if (s.disc) continue;
       const e = s.ent;
-      const msg = { t: S.SNAP, k: this.tick, ack: s.lastSeq, ph: this.phase, pt, life: s.life, p: others };
+      const msg = { t: S.SNAP, k: this.tick, ack: s.lastSeq, ph: this.phase, pt, pe: this.phaseEndTick, life: s.life, p: others };
+      if (s.liveSeq !== null) msg.ls = s.liveSeq;
       if (e && e.alive) {
         msg.ms = MOVE_KEYS.map((k) => e.ms[k]);
         msg.ws = WEAPON_KEYS.map((k) => e.ws[k]);

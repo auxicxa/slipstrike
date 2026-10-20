@@ -1,7 +1,7 @@
 // Phase 4: 2v2 in the browser with 3 bots: loadout during freeze, scoreboard, spectating after death,
 // results screen, and the return to the lobby.
 import { spawn } from 'node:child_process';
-import { launch, openPage, sleep, check } from './lib.mjs';
+import { launch, openPage, sleep, check, WS_URL } from './lib.mjs';
 
 const browser = await launch();
 const { page, errors } = await openPage(browser);
@@ -14,7 +14,7 @@ await page.waitForFunction(() => window.__slip.room?.mode === '2v2');
 await page.selectOption('select.field', 'kiln'); // compact map: the bots find us quickly
 await page.waitForFunction(() => window.__slip.room?.map === 'kiln');
 const code = (await page.textContent('.lobby-code')).trim();
-const bots = spawn('node', ['scripts/bot.js', '--count', '3', '--code', code, '--duration', '300', '--quiet', '--skill', '0.9'], { stdio: 'ignore' });
+const bots = spawn('node', ['scripts/bot.js', '--url', WS_URL, '--count', '3', '--code', code, '--duration', '300', '--quiet', '--skill', '0.9'], { stdio: 'ignore' });
 await page.waitForFunction(() => window.__slip.room?.players.length === 4, null, { timeout: 10000 });
 check(true, 'mode set to 2v2 and 3 bots joined');
 const teams = await page.evaluate(() => window.__slip.room.players.map((p) => p.team).sort().join(''));

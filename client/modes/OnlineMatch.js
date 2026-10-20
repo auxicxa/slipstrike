@@ -9,6 +9,7 @@ import { DT, TICK_RATE, INTERP_DELAY, MODES, TEAM_NAMES, ROUND } from '../../sha
 import { PRIMARIES, SECONDARIES } from '../../shared/config/weapons.js';
 import { MOVEMENT as M } from '../../shared/config/movement.js';
 import { C, S } from '../../shared/net/protocol.js';
+import { predictPhaseOpts } from '../../shared/net/phase.js';
 import { lerpAngle } from '../../shared/sim/math.js';
 import { sfx } from '../audio/Sfx.js';
 import { input } from '../core/Input.js';
@@ -28,6 +29,9 @@ export class OnlineMatch {
     this.me = { id: this.myId, ms: createMoveState(), ws: createWeaponState(), alive: false, hp: 100 };
     this.prev = copyMoveState({}, this.me.ms);
     this.history = [];
+    this.seqOffs = [];
+    this.phaseEnd = 0;
+    this.liveSeq = null;
     this.seq = 0;
     this.acc = 0;
     this.alpha = 0;
@@ -109,7 +113,7 @@ export class OnlineMatch {
     this.net.send({ t: C.INPUT, s: inp.s, b: inp.b, y: inp.y, p: inp.p, w: inp.w, v: inp.v });
     // Every sent input is remembered until the server acknowledges it, even while dead or not yet
     // spawned: the server may process it in our next life, and replays must include it.
-    const opts = { frozen: this.phase === 'freeze', canFight: this.phase === 'live' };
+    const opts = this.predictOpts(inp.s);
     this.history.push({ inp, opts });
     if (this.history.length > 240) this.history.shift();
     if (!this.me.alive || !this.ready) return;
@@ -148,6 +152,12 @@ export class OnlineMatch {
 
     if (m.ph !== this.phase) this.phase = m.ph;
     this.phaseT = m.pt;
+    this.phaseEnd = m.pe ?? 0;
+    this.liveSeq = m.ls ?? null;
+    if (m.ack >= 0) {
+      this.seqOffs.push(m.k - m.ack);
+      if (this.seqOffs.length > 9) this.seqOffs.shift();
+    }
     this.phaseAt = now;
 
     // Local player: new life (spawn) → hard reset, otherwise reconcile
@@ -156,6 +166,7 @@ export class OnlineMatch {
         this.life = m.life;
         this.applyServerState(m);
         this.history = this.history.filter((h) => h.inp.s > m.ack);
+        this.repredictOpts();
         for (const h of this.history) stepPlayer(this.me, h.inp, this.coll, DT, h.opts);
         copyMoveState(this.prev, this.me.ms);
         this.err.x = this.err.y = this.err.z = 0;
@@ -173,6 +184,19 @@ export class OnlineMatch {
       this.game.handleEvents(m.ev, this.myId);
       for (const ev of m.ev) this.onEvent(ev);
     }
+  }
+
+  /**
+   * Predict the rules the server will apply when it processes input `seq` (frozen during the freeze,
+   * fighting allowed only while live), so round starts don't rubber-band. See shared/net/phase.js.
+   */
+  predictOpts(seq) {
+    return predictPhaseOpts(this.phase, this.phaseEnd, this.seqOffs, seq, this.liveSeq);
+  }
+
+  /** Re-predict pending inputs with the latest timing information before replaying them. */
+  repredictOpts() {
+    for (const h of this.history) h.opts = this.predictOpts(h.inp.s);
   }
 
   applyServerState(m) {
@@ -195,6 +219,7 @@ export class OnlineMatch {
       }
     }
     this.history = this.history.filter((h) => h.inp.s > m.ack);
+    this.repredictOpts();
     for (const h of this.history) stepPlayer(this.me, h.inp, this.coll, DT, h.opts);
     const dx = bx - ms.x, dy = by - ms.y, dz = bz - ms.z;
     const d = Math.hypot(dx, dy, dz);
@@ -205,6 +230,7 @@ export class OnlineMatch {
       }
       this.corrections++;
       this.lastCorrection = d;
+      this.maxCorrection = Math.max(this.maxCorrection || 0, d);
       if (d < 2) {
         // Hide small corrections by blending them out over ~100 ms
         this.err.x += dx; this.err.y += dy; this.err.z += dz;

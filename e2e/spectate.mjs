@@ -1,6 +1,6 @@
 // Phase 4: after dying in 3v3, the camera follows a living teammate and the fire key cycles targets.
 import { spawn } from 'node:child_process';
-import { launch, openPage, sleep, check } from './lib.mjs';
+import { launch, openPage, sleep, check, WS_URL } from './lib.mjs';
 
 const browser = await launch();
 const { page, errors } = await openPage(browser);
@@ -13,7 +13,7 @@ await page.waitForFunction(() => window.__slip.room?.mode === '3v3');
 await page.selectOption('select.field', 'kiln'); // compact map: the bots find us quickly
 await page.waitForFunction(() => window.__slip.room?.map === 'kiln');
 const code = (await page.textContent('.lobby-code')).trim();
-const bots = spawn('node', ['scripts/bot.js', '--count', '5', '--code', code, '--duration', '300', '--quiet', '--skill', '0.5'], { stdio: 'ignore' });
+const bots = spawn('node', ['scripts/bot.js', '--url', WS_URL, '--count', '5', '--code', code, '--duration', '300', '--quiet', '--skill', '0.5'], { stdio: 'ignore' });
 await page.waitForFunction(() => window.__slip.room?.players.length === 6, null, { timeout: 10000 });
 await page.click('button:text-is("Ready")');
 await page.waitForFunction(() => window.__slip.online?.ready, null, { timeout: 15000 });

@@ -1,5 +1,5 @@
 // Phase 2: fire at a practice dummy with the keyboard fire key (F) and check damage + hit marker.
-import { launch, openPage, sleep, check } from './lib.mjs';
+import { launch, openPage, sleep, check, WS_URL } from './lib.mjs';
 
 const browser = await launch();
 const { page, errors } = await openPage(browser);
