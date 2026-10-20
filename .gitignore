@@ -3,3 +3,4 @@ dist/
 e2e/out/
 *.log
 .DS_Store
+dist-offline/

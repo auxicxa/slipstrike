@@ -9,6 +9,9 @@ import { MODES, TEAM_NAMES } from '../../shared/config/game.js';
 import { MAPS, MATCH_MAPS } from '../../shared/maps/index.js';
 import { WEAPONS, PRIMARIES, SECONDARIES } from '../../shared/config/weapons.js';
 
+// Practice-only build (VITE_OFFLINE=1), e.g. for hosts that can't run the game server
+const OFFLINE = import.meta.env.VITE_OFFLINE === '1';
+
 export class Menus {
   constructor(app) {
     this.app = app; // { game, startPractice, quickPlay, createRoom, joinRoom, leaveMatch, net }
@@ -58,17 +61,20 @@ export class Menus {
     const el = h('div.menu', h('div.panel',
       h('div.logo', 'SLIPSTRIKE'),
       h('div.tagline', 'Slide. Dash. Click heads. First to five.'),
-      h('div.row', nameIn),
+      OFFLINE ? null : h('div.row', nameIn),
       h('div.col',
-        h('button.btn.primary.big', { on: { click: go((n) => this.app.quickPlay(n)) } }, 'Quick Play'),
-        h('div.row',
-          h('button.btn.grow', { on: { click: go((n) => this.app.createRoom(n)) } }, 'Create Room'),
-          codeIn,
-          h('button.btn', { on: { click: join } }, 'Join'),
-        ),
+        ...(OFFLINE ? [] : [
+          h('button.btn.primary.big', { on: { click: go((n) => this.app.quickPlay(n)) } }, 'Quick Play'),
+          h('div.row',
+            h('button.btn.grow', { on: { click: go((n) => this.app.createRoom(n)) } }, 'Create Room'),
+            codeIn,
+            h('button.btn', { on: { click: join } }, 'Join'),
+          ),
+        ]),
         h('div.row', { style: { margin: 0 } },
-          h('button.btn.grow', { on: { click: () => { sfx.unlock(); this.app.startPractice({ mapId: practiceMap.value }); } } }, 'Practice Range (offline)'),
+          h('button.btn.grow' + (OFFLINE ? '.primary.big' : ''), { on: { click: () => { sfx.unlock(); this.app.startPractice({ mapId: practiceMap.value }); } } }, OFFLINE ? 'Play practice' : 'Practice Range (offline)'),
           practiceMap),
+        OFFLINE ? h('div.hint', 'This is the single-player practice version: every map, every weapon, target dummies. Multiplayer (1v1, 2v2, 3v3, free-for-all) runs on the full version with its game server.') : null,
         h('button.btn', { on: { click: () => this.settings(() => this.title()) } }, 'Settings & Controls'),
       ),
       errEl,

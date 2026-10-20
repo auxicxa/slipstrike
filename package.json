@@ -4,14 +4,17 @@
   "description": "SLIPSTRIKE - a fast-movement browser arena FPS (Three.js + Node WebSocket server)",
   "type": "module",
   "private": true,
-  "engines": { "node": ">=20.19" },
+  "engines": {
+    "node": ">=20.19"
+  },
   "scripts": {
     "dev": "node --watch-path=server --watch-path=shared server/index.js --dev",
     "build": "vite build",
     "start": "node server/index.js",
     "test": "node --test test/*.test.js",
     "bot": "node scripts/bot.js",
-    "e2e": "node e2e/run.mjs"
+    "e2e": "node e2e/run.mjs",
+    "build:practice": "node scripts/build-artifact.mjs"
   },
   "dependencies": {
     "express": "^5.1.0",

@@ -30,7 +30,7 @@ export class Input {
     window.addEventListener('blur', () => this.releaseAll());
     document.addEventListener('visibilitychange', () => { if (document.hidden) this.releaseAll(); });
     document.addEventListener('pointerlockchange', () => this.onLockChange());
-    document.addEventListener('pointerlockerror', () => this.emit('lockError', 'The browser refused pointer lock. Click again in a second.'));
+    document.addEventListener('pointerlockerror', () => this.lockFailed('The browser refused pointer lock. Click again in a second.'));
     // Block Safari/trackpad pinch-zoom gestures while in game
     for (const ev of ['gesturestart', 'gesturechange']) document.addEventListener(ev, (e) => { if (this.enabled) e.preventDefault(); });
   }
@@ -164,7 +164,7 @@ export class Input {
   requestLock(el) {
     this.lockTarget = el;
     if (this.noLock) { this.locked = true; this.emit('lock', true); return; }
-    if (!el.requestPointerLock) { this.emit('lockError', 'This browser does not support pointer lock.'); return; }
+    if (!el.requestPointerLock) { this.useFallbackLook(); return; }
     const want = settings.get('rawInput');
     const attempt = (raw) => {
       try {
@@ -172,7 +172,7 @@ export class Input {
         if (p && typeof p.catch === 'function') {
           p.catch((err) => {
             if (raw) attempt(false); // raw input unsupported (Safari/Firefox, some macOS setups)
-            else this.emit('lockError', (err && err.name === 'SecurityError')
+            else this.lockFailed(err && err.name === 'SecurityError'
               ? 'Wait a moment, then click again (the browser blocks re-locking right after Esc).'
               : 'Could not lock the pointer. Click again.');
           });
@@ -182,6 +182,25 @@ export class Input {
       }
     };
     attempt(want);
+  }
+
+  /**
+   * Pointer lock was refused. Right after Esc that's a browser cooldown, so ask for another click.
+   * If it keeps failing (some embedded pages and app views never allow it), switch to fallback look:
+   * the cursor stays visible, moving it still turns the camera, and the arrow keys work as usual.
+   */
+  lockFailed(msg) {
+    if (performance.now() - this._lastLockExit > 1500) this.lockFails = (this.lockFails || 0) + 1;
+    if (this.lockFails >= 2) this.useFallbackLook();
+    else this.emit('lockError', msg);
+  }
+
+  useFallbackLook() {
+    this.noLock = true;
+    this.fallbackLook = true;
+    this.locked = true;
+    this.emit('lockError', 'This page cannot lock the pointer, so look with the arrow keys or by moving the cursor. Esc pauses.');
+    this.emit('lock', true);
   }
 
   exitLock() {
