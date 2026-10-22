@@ -3,8 +3,6 @@
 import * as THREE from 'three';
 import { boxesGeometry, flatMat } from '../render/geo.js';
 import { LEGACY_WEAPONS } from './legacy.js';
-import { PlayerModel } from '../render/PlayerModel.js';
-import { TEAM_COLORS } from '../../shared/config/game.js';
 
 const entries = [];
 export function register(e) {
@@ -21,16 +19,6 @@ for (const id of Object.keys(LEGACY_WEAPONS)) {
     build: () => new THREE.Mesh(boxesGeometry(LEGACY_WEAPONS[id].parts), flatMat),
   });
 }
-register({
-  id: 'legacy-player', group: 'Legacy (before upgrade)', label: 'old player', teams: true,
-  build: (team = 0) => {
-    const g = new THREE.Group();
-    const p = new PlayerModel(g, TEAM_COLORS[team]);
-    p.update({ x: 0, y: 0, z: 0, yaw: 0, pitch: 0, h: 1.8, sliding: false, grounded: true, weapon: 'rifle', alive: true }, 0.016, 0);
-    g.userData.model = p;
-    return g;
-  },
-});
 
 // ---------------------------------------------------------------- weapons
 import { weaponModel } from './weapons.js';
@@ -48,3 +36,13 @@ for (const [id, label] of Object.entries(WEAPON_LABELS)) {
     build: () => buildFpPreview(id), update: (obj, t, pose) => seekFp(obj, t, pose),
   });
 }
+
+// ---------------------------------------------------------------- characters
+import { buildCharPreview, seekChar, CHAR_POSES } from './charPreview.js';
+import { OUTFITS } from './character.js';
+OUTFITS.forEach((o, i) => {
+  register({
+    id: 'char-' + o.name.toLowerCase(), group: 'Characters', label: `${o.name} (skin ${i + 1})`, teams: true, budget: 4000,
+    poses: CHAR_POSES, build: (team = 0) => buildCharPreview(i, i, team), update: (obj, t, pose) => seekChar(obj, t, pose),
+  });
+});

@@ -325,16 +325,19 @@ export class Game {
   drawRemotes(list, dt, view) {
     const seen = new Set();
     const coll = this.session.coll;
+    // while spectating someone the camera is at their eyes: don't draw their own body around it
+    const watching = view && !view.alive ? this.session.spectateView?.()?.id : null;
     for (const e of list) {
       seen.add(e.id);
       let m = this.models.get(e.id);
       const color = e.dummy ? (e.hp < 100 ? 0xc04a4a : 0x8a8f99) : TEAM_COLORS[e.team] ?? 0xffffff;
-      if (!m) { m = new PlayerModel(this.r.scene, color); this.models.set(e.id, m); }
+      if (!m) { m = new PlayerModel(this.r.scene, color, e.id); this.models.set(e.id, m); }
       m.setColor(color);
       const tag = this.session.teamTag?.(e);
       m.setLabel(tag ? tag.name : null, tag?.color);
       const floor = coll ? coll.supportHeight(e.x, e.z, 0.3, e.y + 0.1) : e.y;
       m.update(e, dt, floor);
+      if (e.id === watching) { m.root.visible = false; m.shadow.visible = false; }
     }
     for (const [id, m] of this.models) if (!seen.has(id)) { m.dispose(); this.models.delete(id); }
   }
@@ -401,6 +404,7 @@ export class Game {
         const w = WEAPONS[ev.w];
         // Tracers and the flash come from the shooter's weapon model when we can see it
         const model = this.models.get(ev.id);
+        model?.fire(ev.w);
         const mz = model?.socketWorld('muzzle');
         const from = mz ? [mz.x, mz.y, mz.z] : o;
         for (let i = 0; i < ev.h.length; i++) {

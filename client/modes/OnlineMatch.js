@@ -333,7 +333,7 @@ export class OnlineMatch {
     if (!c.length) return null;
     let e = c.find((x) => x.id === this.specId);
     if (!e) { e = c[0]; this.specId = e.id; }
-    return { x: e.x, y: e.y, z: e.z, eye: e.h - 0.18, yaw: e.yaw, pitch: e.pitch, name: this.playerName(e.id) };
+    return { id: e.id, x: e.x, y: e.y, z: e.z, eye: e.h - 0.18, yaw: e.yaw, pitch: e.pitch, name: this.playerName(e.id) };
   }
 
   // ------------------------------------------------------------------ drawing
@@ -462,6 +462,7 @@ function entOut(src, flagsSrc) {
   return {
     id: src.id, x: src.x, y: src.y, z: src.z, yaw: src.yaw, pitch: src.pitch, h: src.h,
     grounded: !!(flagsSrc.flags & 1), sliding: !!(flagsSrc.flags & 2), alive: !!(flagsSrc.flags & 4),
+    crouching: !!(flagsSrc.flags & 8), wallRun: flagsSrc.flags & 16 ? -1 : flagsSrc.flags & 32 ? 1 : 0, dashing: !!(flagsSrc.flags & 64),
     weapon: flagsSrc.weapon, hp: flagsSrc.hp,
   };
 }

@@ -45,9 +45,14 @@ check(died, 'local player was eliminated');
 if (died) {
   await sleep(300);
   // Our teammate is a passive bot hiding in spawn, so there is always someone to watch
-  const spec = await page.evaluate(() => window.__slip.online.spectateView()?.name ?? null);
+  const { spec, mates } = await page.evaluate(() => {
+    const o = window.__slip.online;
+    return { spec: o.spectateView()?.name ?? null, mates: o.spectateCandidates().length };
+  });
   const label = (await page.textContent('.spectate').catch(() => '')).trim();
-  check(spec && /Spectating/.test(label), `spectating teammate "${spec}" (${label})`);
+  // Usually the teammate is still alive to watch; if the enemy bots got them too, the game must say so
+  if (mates) check(spec && /Spectating/.test(label), `spectating teammate "${spec}" (${label})`);
+  else check(/Eliminated/.test(label), `whole team down: "${label}"`);
   await page.screenshot({ path: 'e2e/out/spectate.png' });
 }
 // Play out the match (bots finish it; FAST_ROUNDS keeps it short)

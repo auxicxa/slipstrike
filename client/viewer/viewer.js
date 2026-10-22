@@ -6,6 +6,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { listModels, getModel } from '../models/registry.js';
 import { addLighting, configureRenderer } from '../render/lighting.js';
 import { countTriangles, countMeshes } from '../models/kit.js';
+import { playerHitboxes } from '../../shared/sim/hitscan.js';
 
 const stage = document.getElementById('stage');
 const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, preserveDrawingBuffer: true });
@@ -107,6 +108,15 @@ function showSockets() {
   markers.clear();
   if (!state.sockets || !state.obj) return;
   state.obj.updateMatrixWorld(true);
+  if (state.obj.userData.hitboxH) {
+    // the gameplay hitboxes (legs / body / head) for this pose's height, as wireframes
+    for (const b of playerHitboxes(0, 0, 0, state.obj.userData.hitboxH)) {
+      const box = new THREE.Box3(new THREE.Vector3(b.minx, b.miny, b.minz), new THREE.Vector3(b.maxx, b.maxy, b.maxz));
+      const helper = new THREE.Box3Helper(box, 0xffe14d);
+      helper.applyMatrix4(holder.matrixWorld);
+      markers.add(helper);
+    }
+  }
   const colors = { muzzle: 0xff3030, eject: 0xffd23d, grip: 0x3dff7a, support: 0x3db4ff, sight: 0xff40ff };
   state.obj.traverse((o) => {
     if (o.isMesh || o.type !== 'Object3D' || !o.name) return;
@@ -153,7 +163,8 @@ function stats() {
   const box = visibleBox(holder);
   const size = box.getSize(new THREE.Vector3());
   return {
-    id: state.id, triangles: countTriangles(state.obj), meshes: countMeshes(state.obj),
+    // statsTris: a model can report its own count (e.g. a character without the weapon in its hands)
+    id: state.id, triangles: state.obj.userData.statsTris ?? countTriangles(state.obj), meshes: countMeshes(state.obj),
     drawCalls: renderer.info.render.calls, size: [size.x, size.y, size.z].map((v) => +v.toFixed(3)),
     budget: e?.budget ?? null,
   };
@@ -269,7 +280,7 @@ requestAnimationFrame(frame);
 window.__viewer = {
   list: () => listModels().map((e) => ({ id: e.id, group: e.group, label: e.label, poses: e.poses || null, teams: !!e.teams, budget: e.budget ?? null })),
   show: (id, opts) => { const s = show(id, opts); renderModels(); return s; },
-  view, stats, obj: () => state.obj,
+  view, stats, obj: () => state.obj, camera, controls,
   set: (o) => { Object.assign(state, o); if ('fpOrbit' in o && state.id) show(state.id); applyWire(); showSockets(); renderControls(); if (o.light) setLight(o.light); },
   pose: (p, t = 0.4) => { state.pose = p; state.t = t; const e = getModel(state.id); e?.update?.(state.obj, t, p, 0); if (state.sockets) showSockets(); },
   render: () => { controls.update(); renderer.render(scene, state.fp ? fpCamera : camera); },

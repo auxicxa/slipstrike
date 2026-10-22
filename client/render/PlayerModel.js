@@ -1,25 +1,11 @@
-// Low-poly third-person player model: torso+head, two legs, weapon (4 draw calls) and a blob shadow.
+// Third-person player: an animated humanoid (client/models/character.js) holding the same weapon
+// models as first person, a blob shadow and an optional name tag. Movement animation is derived from
+// the (interpolated) entity stream: velocity from position changes, aim pitch, crouch from the height,
+// and the grounded / sliding / wall-run / dash flags from the snapshot.
 import * as THREE from 'three';
-import { boxesGeometry, flatMat } from './geo.js';
 import { MOVEMENT as M } from '../../shared/config/movement.js';
 import { weaponModelFlat } from '../models/weapons.js';
-
-const geoCache = new Map();
-function bodyGeo(color) {
-  if (!geoCache.has(color)) {
-    const dark = new THREE.Color(color).multiplyScalar(0.55).getHex();
-    geoCache.set(color, boxesGeometry([
-      { s: [0.6, 0.62, 0.36], p: [0, 1.14, 0], c: color },          // torso
-      { s: [0.62, 0.1, 0.38], p: [0, 0.86, 0], c: dark },            // belt
-      { s: [0.32, 0.32, 0.32], p: [0, 1.62, 0], c: 0xe9e4da },       // head
-      { s: [0.28, 0.1, 0.06], p: [0, 1.65, -0.165], c: 0x1d2330 },   // visor
-      { s: [0.16, 0.5, 0.16], p: [-0.38, 1.12, 0], c: dark },        // left arm
-    ]));
-  }
-  return geoCache.get(color);
-}
-const legGeo = boxesGeometry([{ s: [0.22, 0.82, 0.24], p: [0, -0.41, 0], c: 0x30343d }, { s: [0.24, 0.1, 0.3], p: [0, -0.79, -0.03], c: 0x1b1d22 }]);
-const arm = boxesGeometry([{ s: [0.16, 0.16, 0.5], p: [0, 0, -0.2], c: 0x30343d }]);
+import { Character, lookFor, HEAD_TOP } from '../models/character.js';
 
 const shadowTex = (() => {
   const c = document.createElement('canvas');
@@ -35,50 +21,52 @@ const shadowTex = (() => {
 const shadowMat = new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, depthWrite: false });
 const shadowGeo = new THREE.PlaneGeometry(1.1, 1.1).rotateX(-Math.PI / 2);
 
+const HOLD = { rifle: 'long', shotgun: 'long', sniper: 'long', pistol: 'pistol', revolver: 'pistol', knife: 'knife' };
+const DEATH_SHOW = 3.2; // seconds a body stays visible
+
 export class PlayerModel {
-  constructor(scene, color) {
+  constructor(scene, color, id = 0, look = null) {
     this.scene = scene;
     this.root = new THREE.Group();
-    this.body = new THREE.Mesh(bodyGeo(color), flatMat);
-    this.legL = new THREE.Mesh(legGeo, flatMat);
-    this.legR = new THREE.Mesh(legGeo, flatMat);
-    this.legL.position.set(-0.15, 0.84, 0);
-    this.legR.position.set(0.15, 0.84, 0);
-    this.armPivot = new THREE.Group();
-    this.armPivot.position.set(0.3, 1.32, 0);
-    this.arm = new THREE.Mesh(arm, flatMat);
-    this.armPivot.add(this.arm);
-    this.guns = {}; // the same weapon models as first person, built on first use
-    this.gun = null;
-    this.upper = new THREE.Group();
-    this.upper.add(this.body, this.armPivot);
-    this.root.add(this.upper, this.legL, this.legR);
+    const lk = look || lookFor(id);
+    this.char = new Character(lk.outfit, lk.skin, color);
+    this.root.add(this.char.mesh);
     this.shadow = new THREE.Mesh(shadowGeo, shadowMat);
     this.shadow.renderOrder = 1;
     scene.add(this.root, this.shadow);
     this.color = color;
+    this.guns = {}; // the same weapon models as first person (baked to one mesh each), built on first use
+    this.gun = null;
     this.weapon = null;
     this.setWeapon('rifle');
-    this.walk = 0;
-    this.lastX = 0; this.lastZ = 0;
+    this.last = null;
+    this.vel = new THREE.Vector3();
+    this.wasAlive = true;
   }
 
   setColor(color) {
     if (color === this.color) return;
     this.color = color;
-    this.body.geometry = bodyGeo(color);
+    this.char.setTeamColor(color);
   }
 
   setWeapon(id) {
-    if (id === this.weapon) return;
+    if (id === this.weapon || !HOLD[id]) return;
     if (!this.guns[id]) {
       const g = weaponModelFlat(id);
-      if (!g) return;
-      // Hand at the end of the arm (0, 0, -0.42 from the shoulder): put the weapon's grip socket there
       const grip = g.getObjectByName('grip');
-      g.position.set(-0.04, -0.01, -0.42).sub(grip ? grip.position : new THREE.Vector3());
+      const gp = grip ? grip.position : new THREE.Vector3();
+      if (HOLD[id] === 'knife') {
+        // in the right fist, blade out of the thumb side
+        g.position.set(0, -0.06, 0).sub(gp);
+        this.char.bones.handR.add(g);
+      } else {
+        if (!g.geometry.boundingBox) g.geometry.computeBoundingBox();
+        if (HOLD[id] === 'long') g.position.set(0, -0.035, -g.geometry.boundingBox.max.z - 0.01); // butt in the shoulder
+        else g.position.set(-0.14, -0.07, -0.42).sub(new THREE.Vector3(0, gp.y, gp.z)); // pistols at arm's length
+        this.char.aim.add(g);
+      }
       g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
-      this.armPivot.add(g);
       this.guns[id] = g;
     }
     if (this.gun) this.gun.visible = false;
@@ -87,47 +75,80 @@ export class PlayerModel {
     this.gun.visible = true;
   }
 
+  /** This player fired (third-person recoil). */
+  fire(weapon) { this.char.fire(weapon === 'sniper' || weapon === 'shotgun' ? 1.2 : weapon === 'revolver' ? 0.9 : 0.5); }
+
   /** World position of the held weapon's muzzle / ejection port (for tracers, flashes, casings). */
   socketWorld(name, out = new THREE.Vector3()) {
     const s = this.gun?.getObjectByName(name);
-    if (!s || !this.root.visible) return null;
-    this.root.updateMatrixWorld(true);
+    if (!s || !this.root.visible || this.char.dead) return null;
     return s.getWorldPosition(out);
   }
 
-  /** e: { x,y,z,yaw,pitch,h,sliding,grounded, weapon, alive }, floorY for the shadow */
+  /**
+   * e: { x,y,z, yaw, pitch, h, grounded, sliding, crouching, wallRun, dashing, weapon, alive }
+   * floorY: ground height under the player (for the shadow)
+   */
   update(e, dt, floorY) {
-    const vis = e.alive !== false;
+    const alive = e.alive !== false;
+    const ch = this.char;
+    if (!alive && this.wasAlive) ch.die();
+    if (alive && !this.wasAlive) { ch.revive(); this.last = null; }
+    this.wasAlive = alive;
+    const vis = alive || (ch.dead && ch.deathT < DEATH_SHOW);
     this.root.visible = vis;
     this.shadow.visible = vis && floorY > -100;
-    if (this.label) this.label.visible = vis;
+    if (this.label) this.label.visible = alive;
     if (!vis) return;
     this.setWeapon(e.weapon);
-    this.root.position.set(e.x, e.y, e.z);
-    this.root.rotation.y = e.yaw;
-    const crouch = e.h < M.standHeight - 0.05;
-    const s = crouch ? e.h / M.standHeight : 1;
-    this.root.scale.set(1, s, 1);
-    this.upper.rotation.x = e.sliding ? 0.45 : 0;
-    this.armPivot.rotation.x = e.pitch;
 
-    const dx = e.x - this.lastX, dz = e.z - this.lastZ;
-    const speed = dt > 0 ? Math.hypot(dx, dz) / dt : 0;
-    this.lastX = e.x; this.lastZ = e.z;
-    if (e.grounded !== false && speed > 0.5 && speed < 30 && !e.sliding) this.walk += dt * speed * 1.6;
-    else this.walk *= 0.85;
-    const swing = Math.sin(this.walk) * Math.min(0.7, speed * 0.08);
-    this.legL.rotation.x = e.sliding ? -1.2 : swing;
-    this.legR.rotation.x = e.sliding ? -1.0 : -swing;
-    if (e.grounded === false && !e.sliding) { this.legL.rotation.x = -0.4; this.legR.rotation.x = 0.2; }
-
-    if (this.label) {
-      this.label.visible = vis;
-      this.label.position.set(e.x, e.y + e.h + 0.35, e.z);
+    // velocity from the position stream (ignoring teleports)
+    if (alive) {
+      if (this.last && dt > 0) {
+        const vx = (e.x - this.last.x) / dt, vy = (e.y - this.last.y) / dt, vz = (e.z - this.last.z) / dt;
+        if (Math.hypot(vx, vz) < 30) this.vel.lerp(new THREE.Vector3(vx, vy, vz), Math.min(1, dt * 12));
+      }
+      this.last = { x: e.x, y: e.y, z: e.z };
+      this.root.position.set(e.x, e.y, e.z);
+      this.root.rotation.y = e.yaw;
     }
-    this.shadow.position.set(e.x, floorY + 0.02, e.z);
-    const hgt = Math.max(0, e.y - floorY);
-    this.shadow.scale.setScalar(Math.max(0.4, 1 - hgt * 0.15));
+    const fx = -Math.sin(e.yaw), fz = -Math.cos(e.yaw); // facing
+    const rx = Math.cos(e.yaw), rz = -Math.sin(e.yaw);   // right
+    const fwd = this.vel.x * fx + this.vel.z * fz, right = this.vel.x * rx + this.vel.z * rz;
+    const speed = Math.hypot(this.vel.x, this.vel.z);
+    const h = e.h ?? M.standHeight;
+    const s = {
+      speed, moveAngle: speed > 0.4 ? Math.atan2(right, fwd) : 0,
+      grounded: e.grounded !== false, vy: this.vel.y, sliding: !!e.sliding,
+      crouch: (M.standHeight - h) / (M.standHeight - M.crouchHeight),
+      wallRun: e.wallRun || 0, dashing: !!e.dashing, pitch: e.pitch || 0, hold: HOLD[e.weapon] || 'long', alive,
+    };
+    this.animate(s, h, dt);
+
+    if (this.label) this.label.position.set(e.x, e.y + h + 0.35, e.z);
+    const px = this.root.position.x, pz = this.root.position.z;
+    this.shadow.position.set(px, floorY + 0.02, pz);
+    const hgt = Math.max(0, this.root.position.y - floorY);
+    this.shadow.scale.setScalar(Math.max(0.4, 1 - hgt * 0.15) * (ch.dead ? 1.4 : 1));
+  }
+
+  /**
+   * Pose the character from a movement state (see Character.update), fit its head top to the player
+   * height h (crouch and slide poses never stick out of the hitbox), and put the hands on the weapon.
+   */
+  animate(s, h, dt) {
+    const ch = this.char;
+    this.setWeapon(s.weapon || this.weapon);
+    s.hold = HOLD[this.weapon];
+    if (s.crouch === undefined) s.crouch = (M.standHeight - h) / (M.standHeight - M.crouchHeight);
+    ch.mesh.scale.set(1, 1, 1);
+    ch.update(s, dt);
+    if (s.alive !== false && !ch.dead) {
+      const top = ch.headTop();
+      const k = top > h ? Math.max(0.82, h / top) : 1;
+      if (k !== 1) { ch.mesh.scale.set(1, k, 1); ch.mesh.updateMatrixWorld(true); }
+      if (s.hold !== 'knife') ch.reach(this.gun.getObjectByName('grip'), this.gun.getObjectByName('support'));
+    }
   }
 
   /** Name tag above the head (teammates only; drawn through walls so you can find each other). */
@@ -159,3 +180,4 @@ export class PlayerModel {
     this.scene.remove(this.root, this.shadow);
   }
 }
+export { HEAD_TOP };
