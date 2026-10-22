@@ -38,6 +38,7 @@ export function getGridTexture() {
 }
 
 const UV_SCALE = 0.5; // one grid cell = 2 m
+const RUN_STRIPE = 0x46e08a; // marks walls you can run on
 
 export function buildMapMesh(map) {
   const pos = [], nor = [], col = [], uv = [];
@@ -74,6 +75,16 @@ export function buildMapMesh(map) {
     quad([x1, y0, z0], [x0, y0, z0], [x0, y1, z0], [x1, y1, z0], [0, 0, -1], c, by); // -z
     quad([x1, y0, z1], [x1, y0, z0], [x1, y1, z0], [x1, y1, z1], [1, 0, 0], c, by); // +x
     quad([x0, y0, z0], [x0, y0, z1], [x0, y1, z1], [x0, y1, z0], [-1, 0, 0], c, by); // -x
+    if (b.run) {
+      // wall-runnable: a green stripe around the sides at running height
+      const e = 0.015, s0 = by + 1.3, s1 = Math.min(y1 - 0.05, by + 1.48), G = RUN_STRIPE;
+      if (s1 > s0) {
+        quad([x0, s0, z1 + e], [x1, s0, z1 + e], [x1, s1, z1 + e], [x0, s1, z1 + e], [0, 0, 1], G, by);
+        quad([x1, s0, z0 - e], [x0, s0, z0 - e], [x0, s1, z0 - e], [x1, s1, z0 - e], [0, 0, -1], G, by);
+        quad([x1 + e, s0, z1], [x1 + e, s0, z0], [x1 + e, s1, z0], [x1 + e, s1, z1], [1, 0, 0], G, by);
+        quad([x0 - e, s0, z0], [x0 - e, s0, z1], [x0 - e, s1, z1], [x0 - e, s1, z0], [-1, 0, 0], G, by);
+      }
+    }
   }
 
   for (const r of map.ramps || []) {

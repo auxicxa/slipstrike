@@ -31,7 +31,18 @@ export class Hud {
     this.net = R.appendChild(h('div.netinfo', this.pingEl = h('span.ping', ''), this.perf = h('div.perf')));
     this.health = R.appendChild(h('div.health', this.hpNum = h('div.hp-num', '100'), h('div.hp-bar', this.hpFill = h('div.hp-fill'))));
     this.ammo = R.appendChild(h('div.ammo', this.ammoNum = h('div.ammo-num', ''), this.wlist = h('div.wlist')));
-    this.dash = R.appendChild(h('div.dash', this.dashFill = h('div.dash-fill'), this.dashLbl = h('span.dash-lbl', 'DASH')));
+    // Movement cluster: air-jump pips, dash cooldown ring, wall-run timer
+    this.speedCanvas = R.appendChild(h('canvas.speedlines'));
+    this.speedT = 0;
+    this.move = R.appendChild(h('div.move',
+      this.djEl = h('div.dj', ...Array.from({ length: M.doubleJumps }, () => h('i')), h('span.cap', 'AIR JUMP')),
+      this.dash = h('div.dash-ring'),
+      this.wrEl = h('div.wr', h('div.wr-fill'), h('span.cap', 'WALL RUN')),
+    ));
+    this.dash.innerHTML = '<svg viewBox="0 0 48 48"><circle class="bg" cx="24" cy="24" r="20"/><circle class="fg" cx="24" cy="24" r="20"/></svg>';
+    this.dashArc = this.dash.querySelector('.fg');
+    this.dash.append(this.dashKey = h('span.key', ''), h('span.cap', 'DASH'));
+    this.wrFill = this.wrEl.firstChild;
     this.banner = R.appendChild(h('div.banner', this.bannerMain = h('div.banner-main'), this.bannerSub = h('div.banner-sub')));
     this.spec = R.appendChild(h('div.spectate'));
     this.center = R.appendChild(h('div.center-msg'));
@@ -189,6 +200,33 @@ export class Hud {
   }
 
   // ---------------------------------------------------------------- per frame
+  /** Flash of speed lines when dashing. */
+  speedBurst() { this.speedT = 1; }
+
+  drawSpeedLines(dt, k) {
+    this.speedT = Math.max(0, this.speedT - dt * 3.2);
+    const c = this.speedCanvas;
+    if (k <= 0.01) { if (this.speedOn) { c.getContext('2d').clearRect(0, 0, c.width, c.height); this.speedOn = false; } return; }
+    this.speedOn = true;
+    const w = Math.round(innerWidth / 2), hgt = Math.round(innerHeight / 2);
+    if (c.width !== w || c.height !== hgt) { c.width = w; c.height = hgt; }
+    const g = c.getContext('2d');
+    g.clearRect(0, 0, w, hgt);
+    const cx = w / 2, cy = hgt / 2, R = Math.hypot(cx, cy);
+    g.lineCap = 'round';
+    const n = Math.round(26 + 30 * k);
+    for (let i = 0; i < n; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const r0 = R * (0.55 + Math.random() * 0.25), r1 = r0 + R * (0.12 + 0.3 * k * Math.random());
+      g.strokeStyle = `rgba(235,245,255,${(0.08 + 0.3 * k * Math.random()).toFixed(3)})`;
+      g.lineWidth = 1 + Math.random() * 2;
+      g.beginPath();
+      g.moveTo(cx + Math.cos(a) * r0, cy + Math.sin(a) * r0);
+      g.lineTo(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1);
+      g.stroke();
+    }
+  }
+
   update(dt, view, ws, spec) {
     const s = this.game.session;
     const info = s?.hudInfo?.() || {};
@@ -221,16 +259,28 @@ export class Hud {
       const aim = aimView(ws);
       this.scope.classList.toggle('show', aim.scoped === true);
       this.crosshair.style.display = aim.scoped || (aim.ads > 0.6 && w.id !== 'shotgun') ? 'none' : '';
-      // Dash
-      const cd = view.dashCd;
-      this.dashFill.style.width = `${(1 - cd / M.dashCooldown) * 100}%`;
-      this.dash.classList.toggle('ready', cd <= 0 && !view.dashUsed);
-      this.dashLbl.textContent = cd > 0 ? `DASH ${cd.toFixed(1)}` : `DASH [${binds.label('dash')}]`;
-      this.dash.style.display = '';
+      // Movement: dash ring fills as the cooldown runs out; pips light while an air jump is left
+      const cd = view.dashCd || 0;
+      const C = 125.66; // ring circumference (r = 20)
+      this.dashArc.style.strokeDashoffset = `${C * Math.min(1, cd / M.dashCooldown)}`;
+      const dashReady = cd <= 0 && (view.grounded || !view.dashUsed);
+      this.dash.classList.toggle('ready', dashReady);
+      this.dash.classList.toggle('spent', cd <= 0 && !dashReady);
+      const keyTxt = cd > 0 ? cd.toFixed(1) : binds.label('dash');
+      if (this.dashKey.textContent !== keyTxt) this.dashKey.textContent = keyTxt;
+      const jumps = view.grounded ? M.doubleJumps : (view.airJumps ?? M.doubleJumps);
+      this.djEl.querySelectorAll('i').forEach((el, i) => el.classList.toggle('on', i < jumps));
+      this.wrEl.classList.toggle('show', !!view.wallRun);
+      if (view.wallRun) this.wrFill.style.width = `${Math.max(0, (view.wrT || 0) / M.wallRunMaxTime) * 100}%`;
+      this.move.style.display = '';
+      // Speed lines: a burst on every dash, and a faint stream at very high speed
+      const sp = Math.hypot(view.vx || 0, view.vz || 0);
+      this.drawSpeedLines(dt, Math.max(this.speedT, Math.min(1, Math.max(0, (sp - 11.5) / 4)) * 0.45));
     } else {
       this.ammo.style.display = 'none';
       this.scope.classList.remove('show');
-      this.dash.style.display = 'none';
+      this.move.style.display = 'none';
+      this.drawSpeedLines(dt, 0);
       this.crosshair.style.display = spec ? 'none' : '';
     }
 

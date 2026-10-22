@@ -9,7 +9,7 @@ const m = new MapBuilder('dockyard', 'Dockyard', { sky: 0xa9cde6, fog: 0xbfd6e6,
 m.floor(-25, 0, 25, 31);
 m.box(-26, 0, 31, 26, 9, 32, WALL);
 m.box(-26, 0, 0, -25, 9, 31, WALL);
-m.box(25, 0, 0, 26, 9, 31, WALL);
+m.box(25, 0, 0, 26, 9, 31, WALL).run(3); // outer walls are runnable
 
 // Spawn cover: a container lying sideways and two crates
 m.box(-3, 0, 22, 3, 2.4, 24.5, RED);
@@ -25,12 +25,12 @@ m.box(-19, 3, 9, -18.7, 4, 19, RAIL);
 // Container yard on the right: single (mantle-able, 2.4 m) and stacked (too tall to climb)
 m.box(13, 0, 9, 15.5, 2.4, 15, BLUE);
 m.box(17, 0, 9, 19.5, 2.4, 15, GREEN);
-m.box(17, 2.4, 9, 19.5, 4.8, 15, YELLOW);
+m.box(17, 2.4, 9, 19.5, 4.8, 15, YELLOW).run(2); // the stacked containers
 m.box(21.5, 0, 16, 25, 2.4, 22, RED);
 m.block(11, 18.5, 2, 2, 1.2, CRATE);
 
 // Mid-lane cover
-m.box(-11, 0, 10, -5, 2.4, 12.5, GREEN);
+m.box(-11, 0, 10, -5, 2.4, 12.5, GREEN).run();
 m.block(-2, 13, 1, 4, 1.1, CRATE);
 m.block(5, 9, 3, 1, 1.2, CRATE);
 

@@ -1,7 +1,8 @@
 // Helpers for writing maps as data. Maps are plain objects:
 //   { id, name, boxes: [{min,max,c}], ramps: [{min,max,dir,c}], spawns: {0:[[x,y,z,yaw]], 1:[...]}, ffa:[...] }
 // Colours are hex numbers. Use mirror() to build one half of a map and get a point-symmetric
-// (180° rotated) copy for the other team, which keeps both sides fair.
+// (180° rotated) copy for the other team, which keeps both sides fair. Call run() after adding a box to
+// let players wall run on its sides (the map renderer marks those walls with a stripe).
 
 export class MapBuilder {
   constructor(id, name, opts = {}) {
@@ -27,6 +28,12 @@ export class MapBuilder {
       max: [Math.max(x0, x1), Math.max(y0, y1), Math.max(z0, z1)],
       c,
     });
+    return this;
+  }
+
+  /** Mark the last `n` boxes added as wall-runnable. */
+  run(n = 1) {
+    for (const b of this.map.boxes.slice(-n)) b.run = true;
     return this;
   }
 
@@ -77,7 +84,7 @@ export class MapBuilder {
     const m = this.map;
     const boxes = m.boxes.slice();
     for (const b of boxes) {
-      m.boxes.push({ min: [-b.max[0], b.min[1], -b.max[2]], max: [-b.min[0], b.max[1], -b.min[2]], c: b.c, noclip: b.noclip });
+      m.boxes.push({ min: [-b.max[0], b.min[1], -b.max[2]], max: [-b.min[0], b.max[1], -b.min[2]], c: b.c, noclip: b.noclip, run: b.run });
     }
     const flip = { '+x': '-x', '-x': '+x', '+z': '-z', '-z': '+z' };
     for (const r of m.ramps.slice()) {

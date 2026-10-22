@@ -52,11 +52,41 @@ export const MOVEMENT = {
   slideSteer: 2.0,          // a little directional control while sliding
   slideJumpMult: 1.0,       // jumping out of a slide keeps this fraction of horizontal speed
 
-  // --- Air dash --------------------------------------------------------------
-  dashSpeed: 11,            // horizontal speed set by the dash
-  dashUpVelocity: 1.5,      // small upward pop so dashes don't feel like falling
-  dashCooldown: 2.0,
-  dashMinAirTime: 0.08,     // can't dash on the first frames of a jump (prevents accidental double taps)
+  // --- Double jump -----------------------------------------------------------
+  doubleJumps: 1,           // extra jumps in the air; refilled on landing, wall-run start and wall jump
+  doubleJumpVelocity: 6.4,  // upward speed set by the air jump
+  doubleJumpSteer: 0.55,    // how far the air jump turns your horizontal velocity toward the keys (0–1)
+  doubleJumpMinAirTime: 0.06, // a press this soon after take-off doesn't spend the air jump
+
+  // --- Dash (ground and air) -------------------------------------------------
+  dashSpeed: 13,            // speed along the dash direction during the burst (never lower than before)
+  dashDuration: 0.15,       // the burst: no friction, little gravity
+  dashGravityMult: 0.15,    // gravity during the burst
+  dashKeepSideways: 0.5,    // fraction of the old sideways velocity kept (momentum carries through)
+  dashUpVelocity: 1.2,      // small upward pop when dashing in the air
+  dashCooldown: 1.25,
+  // one dash per airtime (refilled on landing, wall-run start and wall jump)
+
+  // --- Wall running ----------------------------------------------------------
+  // Airborne, holding forward, moving along a wall tagged runnable in the map (run: true).
+  wallRunMinSpeed: 5.5,     // speed along the wall needed to start
+  wallRunSpeed: 10,         // constant speed while running (faster entries keep up to wallRunMaxSpeed)
+  wallRunMaxSpeed: 13,
+  wallRunMaxTime: 1.3,      // seconds before you peel off
+  wallRunGravityMult: 0.22, // gravity while wall running
+  wallRunStartUp: 1.6,      // vertical speed on attach (at least this...)
+  wallRunStartUpMax: 3.2,   // ...and at most this, so you can't launch up a wall
+  wallRunProbe: 0.2,        // how close the wall must be to the side of your body (m)
+  wallRunMinOverlap: 0.7,   // how much of your body height the wall must cover (m)
+  wallRunMinAirTime: 0.1,   // in the air at least this long first
+  wallRunMinLook: 0.3,      // view must point along the wall: cos of the angle to the wall (0.3 ≈ 72°)
+  wallRunReleaseLook: 0.8,  // turning to face away from the wall this much lets go
+  wallRunCooldown: 0.35,    // after leaving a wall, before you can attach to another
+  wallRunSameWallCooldown: 0.9, // before you can attach to the same wall again
+  wallJumpOut: 6.5,         // push away from the wall
+  wallJumpUp: 7.2,          // upward speed of the wall jump
+  wallJumpKeep: 1.0,        // fraction of the speed along the wall you keep
+  wallJumpReattach: 0.2,    // cooldown after a wall jump (lets you chain to the opposite wall)
 
   // --- Walls -----------------------------------------------------------------
   wallSlideMaxFall: 3.0,    // fall speed is capped at this while pushing into a wall in the air
@@ -74,6 +104,8 @@ export const MOVEMENT = {
   landDipScale: 0.012,      // landing camera dip per m/s of fall speed
   landDipMax: 0.22,
   slideTiltDeg: 4,
+  wallRunTiltDeg: 11,       // camera roll away from the wall while wall running
+  dashFovKick: 9,           // degrees added for a moment when you dash
   bobAmount: 0.012,
   bobFreq: 1.6,             // bob cycles per metre travelled (×π)
   swayAmount: 0.0018,

@@ -105,6 +105,7 @@ export class OfflinePractice {
     return {
       x: p.x + (c.x - p.x) * a, y: p.y + (c.y - p.y) * a, z: p.z + (c.z - p.z) * a, eye: p.eye + (c.eye - p.eye) * a,
       vx: c.vx, vz: c.vz, vy: c.vy, grounded: c.grounded, sliding: c.sliding, dashCd: c.dashCd, dashUsed: c.dashUsed,
+      dashT: c.dashT, airJumps: c.airJumps, wallRun: c.wallRun, wrT: c.wrT, wrNx: c.wrNx, wrNz: c.wrNz,
       alive: this.me.alive, hp: this.me.hp, ws: this.me.ws,
     };
   }

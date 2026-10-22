@@ -83,7 +83,7 @@ export class Menus {
       errEl,
       h('div.hint',
         'Made for trackpads: ', h('span.kbd', binds.label('fire', 1)), ' fires, ', h('span.kbd', binds.label('ads')), ' scopes, ',
-        h('span.kbd', binds.label('dash')), ' air-dashes. Every key can be rebound in Settings.'),
+        h('span.kbd', binds.label('dash')), ' dashes, ', h('span.kbd', binds.label('jump')), ' twice double-jumps. Every key can be rebound in Settings.'),
     ));
     this.mount('title', el);
     if (!nameIn.value) setTimeout(() => nameIn.focus(), 50);

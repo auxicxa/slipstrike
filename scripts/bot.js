@@ -183,7 +183,16 @@ class Bot {
       if (Math.random() < 0.6) b |= BTN.SPRINT;
       if (Math.random() < 0.02) b |= BTN.JUMP;
       if (Math.random() < 0.01) b |= BTN.CROUCH | BTN.SPRINT;
-      if (!me.grounded && Math.random() < 0.02) b |= BTN.DASH;
+      // Air jump: a fresh press while rising or at the top of a jump (the server ignores it once spent)
+      if (!me.grounded && !me.wallRun && me.airJumps > 0 && me.vy < 2 && !this.jumpHeld && Math.random() < 0.04) b |= BTN.JUMP;
+      // Dash: on the ground now and then, in the air sometimes, toward a target when chasing
+      if (me.dashCd <= 0 && Math.random() < (me.grounded ? (chase || target ? 0.012 : 0.004) : 0.02)) b |= BTN.DASH;
+      // Wall run: keep forward held next to walls (the sim decides); kick off after a moment
+      if (me.wallRun) {
+        b |= BTN.FWD;
+        if (me.wrT < 0.5 && !this.jumpHeld && Math.random() < 0.08) b |= BTN.JUMP;
+      }
+      this.jumpHeld = !!(b & BTN.JUMP);
       // Stuck detection
       if (this.lastPos && Math.hypot(me.x - this.lastPos[0], me.z - this.lastPos[1]) < 0.02) this.stuckT += 1 / 60; else this.stuckT = 0;
       this.lastPos = [me.x, me.z];

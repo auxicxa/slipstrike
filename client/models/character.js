@@ -313,8 +313,8 @@ export class Character {
       blend(P, Ar, w.air);
     }
 
-    // ---- wall run: fast stride, body leaning away from the wall
-    if (w.wall > 0) P[ROOT_ROLL] += -this.wallSide * 0.38 * w.wall;
+    // ---- wall run: fast stride, feet toward the wall and the body leaning away from it
+    if (w.wall > 0) P[ROOT_ROLL] += this.wallSide * 0.38 * w.wall;
 
     // ---- slide: lying back on one hip, lead leg out front
     if (w.slide > 0) {
@@ -385,6 +385,7 @@ export class Character {
     }
     B.hips.position.set(0, 0.93 + P[HIPS_Y], P[HIPS_Z]);
     B.root.rotation.set(P[ROOT_PITCH], 0, P[ROOT_ROLL]); // pivots at the feet (falling over when dead)
+    B.root.position.set(1.25 * Math.sin(P[ROOT_ROLL]), 0, 0); // a lean keeps the head over the hitbox
     this.mesh.updateMatrixWorld(true);
 
     // weapon mount: world orientation = body yaw + aim pitch (independent of spine lean)

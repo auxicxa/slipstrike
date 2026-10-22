@@ -10,7 +10,7 @@ const m = new MapBuilder('overpass', 'Overpass', { sky: 0xf0b48a, fog: 0xd9a888,
 m.floor(-35, 0, 35, 39);
 m.box(-36, 0, 39, 36, 10, 40, WALL);
 m.box(-36, 0, 0, -35, 10, 39, WALL);
-m.box(35, 0, 0, 36, 10, 39, WALL);
+m.box(35, 0, 0, 36, 10, 39, WALL).run(3); // outer walls are runnable
 m.decal(-35, 6, 35, 9, ROAD); // street under the bridge side
 
 // The bridge: deck at 4 m across the middle, ramps down at the east end (mirrored to the west)
@@ -26,11 +26,11 @@ m.block(10, 0, 1.4, 1.4, 4, PILLAR);
 m.block(20, 0, 1.4, 1.4, 4, PILLAR);
 
 // Team-side buildings with rooftop access
-m.box(12, 0, 15, 26, 5, 24, BLDG);
+m.box(12, 0, 15, 26, 5, 24, BLDG).run();
 m.box(12, 5, 15, 26, 5.4, 24, ROOF);
 m.ramp(26, 0, 15, 34, 5, 19, '-x', RAMP);       // ramp up to the roof
 m.box(12, 5.4, 15, 26, 6.4, 15.3, BARRIER);    // roof edge (cover facing the bridge)
-m.box(-26, 0, 17, -14, 7.5, 27, BLDG2);        // tall building (no roof access)
+m.box(-26, 0, 17, -14, 7.5, 27, BLDG2).run(); // tall building (no roof access)
 m.box(-30, 0, 10, -22, 2.4, 13, CRATE);        // loading bay crates (mantle-able)
 m.box(-22, 0, 10, -19, 1.2, 12, CRATE);
 

@@ -9,14 +9,14 @@ export const ACTIONS = [
   { id: 'jump', label: 'Jump', group: 'Movement', def: ['Space'] },
   { id: 'crouch', label: 'Crouch / slide', group: 'Movement', def: ['KeyC'] },
   { id: 'sprint', label: 'Sprint', group: 'Movement', def: ['ShiftLeft', 'ShiftRight'] },
-  { id: 'dash', label: 'Air dash', group: 'Movement', def: ['KeyV'] },
+  { id: 'dash', label: 'Dash (ground and air)', group: 'Movement', def: ['KeyX', 'KeyV'] },
   { id: 'fire', label: 'Fire / quick stab', group: 'Combat', def: ['Mouse0', 'KeyF'] },
   { id: 'ads', label: 'Scope / ADS / heavy stab', group: 'Combat', def: ['KeyE', 'Mouse2'] },
   { id: 'reload', label: 'Reload', group: 'Combat', def: ['KeyR'] },
   { id: 'slot1', label: 'Primary weapon', group: 'Combat', def: ['Digit1'] },
   { id: 'slot2', label: 'Secondary weapon', group: 'Combat', def: ['Digit2'] },
   { id: 'slot3', label: 'Weapon slot 3 (knife)', group: 'Combat', def: ['Digit3'] },
-  { id: 'knife', label: 'Knife', group: 'Combat', def: ['KeyX'] },
+  { id: 'knife', label: 'Knife', group: 'Combat', def: ['KeyZ'] },
   { id: 'lastWeapon', label: 'Quick-switch last weapon', group: 'Combat', def: ['KeyQ'] },
   { id: 'scoreboard', label: 'Scoreboard', group: 'Interface', def: ['Tab'] },
   { id: 'chatWheel', label: 'Quick-chat wheel', group: 'Interface', def: ['KeyT'] },
@@ -42,6 +42,9 @@ class BindStore {
       const raw = localStorage.getItem(KEY);
       if (raw) {
         const saved = JSON.parse(raw);
+        // Dash moved to X (knife to Z). Players who never changed those two keys get the new layout.
+        const same = (v, def) => Array.isArray(v) && v.length === def.length && v.every((c, i) => c === def[i]);
+        if (same(saved.dash, ['KeyV']) && same(saved.knife, ['KeyX'])) { delete saved.dash; delete saved.knife; }
         for (const a of ACTIONS) {
           if (Array.isArray(saved[a.id])) this.binds[a.id] = saved[a.id].filter((c) => typeof c === 'string').slice(0, 2);
         }

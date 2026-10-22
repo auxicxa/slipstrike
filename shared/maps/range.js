@@ -6,7 +6,7 @@ const WALL = 0x5d6475, CRATE = 0xc98f4a, PLAT = 0x7d8aa6, RAMP = 0x9aa6bf, MANTL
 const m = new MapBuilder('range', 'Range', { sky: 0x9fc6e8, fog: 0xb9d3ea, fogNear: 50, fogFar: 160, ground: 0x7f838e });
 
 m.floor(-45, -60, 45, 40);
-m.walls(-45, -60, 45, 40, 7, WALL);
+m.walls(-45, -60, 45, 40, 7, WALL).run(4); // outer walls are runnable
 
 // Lane markers on the floor (thin, walkable)
 for (let z = -50; z <= 30; z += 10) m.decal(-0.1, z - 0.05, 0.1, z + 0.05, 0x9da2ad);
@@ -22,9 +22,9 @@ m.ramp(-18, 0, -8, -12, 1.5, 0, '-x', RAMP);
 // --- Right: mantle test blocks of increasing height ---
 const mh = [0.6, 0.9, 1.2, 1.35, 1.8];
 mh.forEach((h, i) => m.block(18 + i * 4.5, -6, 3, 3, h, i === mh.length - 1 ? WALL : MANTLE));
-// Wall to practise wall-slide against
-m.box(36, 0, -30, 37, 7, -12, WALL);
-m.box(28, 0, -30, 29, 7, -12, WALL);
+// Wall-run lane: two parallel runnable walls to practise wall runs and wall jumps between them
+m.box(36, 0, -30, 37, 7, -12, WALL).run();
+m.box(28, 0, -30, 29, 7, -12, WALL).run();
 
 // --- Crates as cover near the dummies ---
 m.block(-10, -22, 2, 2, 1.2, CRATE);

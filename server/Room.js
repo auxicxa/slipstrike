@@ -472,7 +472,10 @@ export class Room {
       const e = s.ent;
       if (!e) continue;
       const ms = e.ms;
-      const flags = (ms.grounded ? 1 : 0) | (ms.sliding ? 2 : 0) | (e.alive ? 4 : 0) | (ms.crouching ? 8 : 0);
+      // wall run side relative to the facing: the wall normal points to our right → the wall is on the left
+      const wallLeft = ms.wallRun && (ms.wrNx * Math.cos(ms.yaw) - ms.wrNz * Math.sin(ms.yaw)) > 0;
+      const flags = (ms.grounded ? 1 : 0) | (ms.sliding ? 2 : 0) | (e.alive ? 4 : 0) | (ms.crouching ? 8 : 0) |
+        (ms.wallRun ? (wallLeft ? 16 : 32) : 0) | (ms.dashT > 0 ? 64 : 0);
       others.push([s.id, r3(ms.x), r3(ms.y), r3(ms.z), r3(ms.yaw), r3(ms.pitch), r3(ms.h), flags,
         WEAPON_IDS.indexOf(e.ws.slots[e.ws.cur]), Math.ceil(e.hp), s.fxAcc]);
       s.fxAcc = 0;

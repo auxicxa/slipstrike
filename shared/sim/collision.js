@@ -10,6 +10,7 @@ export class CollisionWorld {
       minx: b.min[0], miny: b.min[1], minz: b.min[2],
       maxx: b.max[0], maxy: b.max[1], maxz: b.max[2],
       noclip: !!b.noclip, // decorative only (e.g. a floor stripe)
+      run: !!b.run,       // wall running allowed on its sides
     })).filter((b) => !b.noclip);
     this.ramps = (map.ramps || []).map((r) => {
       const R = {

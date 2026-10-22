@@ -73,6 +73,22 @@ function segmented(key, label, options, sub) {
 
 const grid = (...rows) => h('div.set-grid', ...rows.flat());
 
+/** How the movement abilities work, with the player's current keys. */
+function movementHelp() {
+  const k = (id) => h('span.kbd', binds.label(id) || '—');
+  const item = (title, ...body) => h('li', h('b', title), ' ', ...body);
+  return h('div.move-help',
+    h('h3', 'Movement'),
+    h('ul',
+      item('Double jump:', 'press ', k('jump'), ' again in the air. Refills when you land, start a wall run or wall jump.'),
+      item('Dash:', k('dash'), ' bursts you along your keys (or where you look), on the ground or once per jump. Short cooldown; your speed carries on afterwards.'),
+      item('Wall run:', 'jump beside a wall with a ', h('span.stripe', 'green stripe'), ', hold ', k('forward'), ' and move along it. ', k('jump'), ' kicks off into a wall jump; chain between walls.'),
+      item('Slide:', 'sprint with ', k('sprint'), ' and press ', k('crouch'), '. Works straight out of a dash, too.'),
+      item('Air strafe and bunnyhop:', 'steer with ', k('left'), '/', k('right'), ' while turning; press ', k('jump'), ' just before landing to keep your speed.'),
+      item('Mantle:', 'run or jump into a ledge while holding ', k('forward'), ' to climb it.'),
+    ));
+}
+
 // ---------------------------------------------------------------- tabs
 function lookTab() {
   return h('div',
@@ -166,6 +182,7 @@ function controlsTab(toast) {
     wrap.append(
       h('div.row', h('div.dim.grow', 'Click a binding, then press any key or mouse button. Esc cancels, Backspace clears. If a key is already used, it moves to the new action.'),
         h('button.btn.small', { on: { click: () => { binds.resetAll(); draw(); toast('Keybinds reset to defaults'); } } }, 'Reset to default')),
+      movementHelp(),
       table,
       h('div.hint', 'Defaults stay away from Ctrl and Cmd: on a Mac those trigger right-click and browser shortcuts. Esc always opens the pause menu (the browser reserves it).'),
     );

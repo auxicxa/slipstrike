@@ -165,3 +165,161 @@ test('deterministic: same inputs give identical states', () => {
   run(b, flat, 300, (i) => seq[i], (i) => i * 0.01);
   assert.deepEqual(a, b);
 });
+
+// ------------------------------------------------------------------ double jump, dash, wall running
+const jumpTap = (i) => (i === 0 ? BTN.JUMP : 0);
+
+test('double jump: one extra jump in the air, refilled on landing', () => {
+  const s = settled();
+  run(s, flat, 1, BTN.JUMP);
+  run(s, flat, 12, 0);
+  const vyBefore = s.vy;
+  run(s, flat, 1, BTN.JUMP);
+  assert.ok(Math.abs(s.vy - (M.doubleJumpVelocity - M.gravity * DT)) < 1e-6, `air jump vy ${s.vy} (was ${vyBefore})`);
+  assert.equal(s.airJumps, 0);
+  run(s, flat, 1, 0);
+  const vy = s.vy;
+  run(s, flat, 1, BTN.JUMP);
+  assert.ok(s.vy < vy, 'no third jump');
+  run(s, flat, 120, 0);
+  assert.equal(s.grounded, true);
+  assert.equal(s.airJumps, M.doubleJumps, 'refilled on landing');
+});
+
+test('double jump reaches higher than a single jump', () => {
+  const peak = (double) => {
+    const s = settled();
+    let top = 0;
+    run(s, flat, 40, (i) => (i === 0 || (double && i === 20) ? BTN.JUMP : 0));
+    run(s, flat, 60, (i, st) => { top = Math.max(top, st.y); return 0; });
+    return top;
+  };
+  // (peak of the run is measured over the whole jump)
+  const one = (() => { const s = settled(); let t = 0; run(s, flat, 100, (i, st) => { t = Math.max(t, st.y); return jumpTap(i); }); return t; })();
+  const two = (() => { const s = settled(); let t = 0; run(s, flat, 120, (i, st) => { t = Math.max(t, st.y); return i === 0 || i === 20 ? BTN.JUMP : 0; }); return t; })();
+  assert.ok(two > one + 0.6, `double ${two.toFixed(2)} vs single ${one.toFixed(2)}`);
+  void peak;
+});
+
+test('a jump pressed just before landing is a bunnyhop, not the air jump', () => {
+  const s = settled();
+  run(s, flat, 1, BTN.JUMP);
+  // fall until just above the floor
+  run(s, flat, 200, (i, st) => 0, 0);
+  const t = settled();
+  run(t, flat, 1, BTN.JUMP);
+  let n = 0;
+  while (!(t.vy < 0 && t.y < 0.08) && n++ < 200) simulateMove(t, 0, 0, 0, flat, DT);
+  simulateMove(t, BTN.JUMP, 0, 0, flat, DT);
+  assert.equal(t.airJumps, M.doubleJumps, 'air jump kept');
+  for (let i = 0; i < 4 && !t.grounded; i++) simulateMove(t, BTN.JUMP, 0, 0, flat, DT);
+  assert.ok(t.vy > 0 || t.fx, 'hopped on landing');
+});
+
+test('ground dash: burst of speed, cooldown, momentum kept afterwards', () => {
+  const s = settled();
+  run(s, flat, 60, BTN.FWD | BTN.SPRINT);
+  run(s, flat, 1, BTN.DASH | BTN.FWD | BTN.SPRINT);
+  assert.ok(hs(s) >= M.dashSpeed - 0.01, `dash speed ${hs(s)}`);
+  assert.ok(s.dashT > 0 && s.dashCd > 0);
+  const v0 = hs(s);
+  run(s, flat, Math.round(M.dashDuration / DT) - 1, BTN.FWD | BTN.SPRINT);
+  assert.ok(hs(s) > v0 - 0.3, 'no friction during the burst');
+  run(s, flat, 1, BTN.DASH | BTN.FWD);
+  assert.ok(s.dashCd > M.dashCooldown - M.dashDuration - 2 * DT, 'second dash blocked by the cooldown');
+  run(s, flat, Math.ceil(M.dashCooldown / DT), BTN.FWD | BTN.SPRINT);
+  assert.equal(s.dashCd, 0);
+});
+
+test('sideways dash keeps half the old momentum', () => {
+  const s = settled();
+  run(s, flat, 90, BTN.FWD | BTN.SPRINT); // moving toward -z
+  const vz = s.vz;
+  run(s, flat, 1, BTN.DASH | BTN.RIGHT);
+  assert.ok(s.vx >= M.dashSpeed - 0.01, `dashed right ${s.vx}`);
+  assert.ok(Math.abs(s.vz - vz * M.dashKeepSideways) < 0.5, `kept forward speed ${s.vz} vs ${vz}`);
+});
+
+test('dash never passes through a wall', () => {
+  const world = new CollisionWorld(new MapBuilder('w', 'w').floor(-50, -50, 50, 50).box(-5, 0, -3.2, 5, 3, -3, 0).build());
+  const s = settled(0, 0, world);
+  for (let k = 0; k < 6; k++) {
+    run(s, world, 1, BTN.DASH | BTN.FWD);
+    run(s, world, 90, BTN.FWD);
+  }
+  assert.ok(s.z > -3 + M.halfWidth - 0.01, `stopped at the wall (z ${s.z.toFixed(3)})`);
+});
+
+// A runnable wall along z (x from 4 to 5), 6 m tall, and a plain wall elsewhere
+const wallWorld = (run = true) => {
+  const b = new MapBuilder('wr', 'wr').floor(-60, -60, 60, 60).box(4, 0, -40, 5, 6, 10, 0);
+  if (run) b.run();
+  return new CollisionWorld(b.build());
+};
+/** Sprint alongside the wall (just beside it), jump, keep holding forward and into the wall. */
+function wallRunSetup(world) {
+  const s = settled(4 - M.halfWidth - 0.05, 5, world);
+  run(s, world, 50, BTN.FWD | BTN.SPRINT);
+  run(s, world, 1, BTN.FWD | BTN.SPRINT | BTN.JUMP);
+  let started = -1;
+  for (let i = 0; i < 40 && started < 0; i++) {
+    simulateMove(s, BTN.FWD | BTN.RIGHT | BTN.SPRINT, 0, 0, world, DT);
+    if (s.wallRun) started = i;
+  }
+  return { s, started };
+}
+
+test('wall run: starts on a runnable wall, constant speed, low gravity, limited time', () => {
+  const world = wallWorld(true);
+  const { s, started } = wallRunSetup(world);
+  assert.ok(started >= 0, 'wall run started');
+  assert.equal(s.wrNx, -1, 'wall normal points away from the wall');
+  assert.equal(s.airJumps, M.doubleJumps);
+  const y0 = s.y, sp0 = hs(s);
+  run(s, world, 30, BTN.FWD | BTN.RIGHT);
+  assert.equal(s.wallRun, 1);
+  assert.ok(Math.abs(hs(s) - sp0) < 0.7, `speed held (${sp0.toFixed(2)} → ${hs(s).toFixed(2)})`);
+  const fallFree = 0.5 * M.gravity * 0.5 ** 2;
+  assert.ok(y0 - s.y < fallFree * 0.5, 'falls much slower than free fall');
+  run(s, world, Math.ceil(M.wallRunMaxTime / DT), BTN.FWD | BTN.RIGHT);
+  assert.equal(s.wallRun, 0, 'peels off after the time limit');
+});
+
+test('no wall run on walls that are not tagged runnable', () => {
+  const { started } = wallRunSetup(wallWorld(false));
+  assert.equal(started, -1);
+});
+
+test('wall run needs forward held and ends when released', () => {
+  const world = wallWorld(true);
+  const { s } = wallRunSetup(world);
+  run(s, world, 1, BTN.RIGHT);
+  assert.equal(s.wallRun, 0);
+});
+
+test('wall jump pushes away from the wall and refills the air jump', () => {
+  const world = wallWorld(true);
+  const { s } = wallRunSetup(world);
+  run(s, world, 10, BTN.FWD | BTN.RIGHT);
+  s.airJumps = 0;
+  run(s, world, 1, BTN.FWD | BTN.JUMP);
+  assert.equal(s.wallRun, 0);
+  assert.ok(s.vx < -M.wallJumpOut + 0.5, `pushed off the wall (vx ${s.vx})`);
+  assert.ok(s.vy > M.wallJumpUp - 1, `jumped up (vy ${s.vy})`);
+  assert.equal(s.airJumps, M.doubleJumps);
+  assert.ok(s.fx & 128, 'wall jump event');
+  // can't stick straight back onto the same wall
+  run(s, world, 10, BTN.FWD | BTN.RIGHT);
+  assert.equal(s.wallRun, 0);
+});
+
+test('deterministic with the new moves: replaying inputs from a copy gives identical states', () => {
+  const world = wallWorld(true);
+  const seq = Array.from({ length: 400 }, (_, i) => (((i * 2654435761) >>> 0) % 2048) & (BTN.FWD | BTN.RIGHT | BTN.JUMP | BTN.SPRINT | BTN.CROUCH | BTN.DASH));
+  const a = settled(2, 0, world);
+  const snap = JSON.parse(JSON.stringify(a));
+  run(a, world, 400, (i) => seq[i] | BTN.FWD, (i) => Math.sin(i * 0.05) * 0.8);
+  const b = Object.assign(createMoveState(), snap);
+  run(b, world, 400, (i) => seq[i] | BTN.FWD, (i) => Math.sin(i * 0.05) * 0.8);
+  assert.deepEqual(a, b);
+});

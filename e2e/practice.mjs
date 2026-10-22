@@ -30,7 +30,8 @@ await page.keyboard.up('KeyC');
 await page.keyboard.up('ShiftLeft');
 await page.keyboard.up('KeyW');
 await page.keyboard.press('Space');
-await sleep(150);
+// (poll rather than sleep: software-rendered test browsers run at ~8–12 FPS)
+await page.waitForFunction(() => { const m = window.__slip.game.session.me.ms; return !m.grounded && m.y > 0.3; }, null, { timeout: 2000 }).catch(() => {});
 let s3 = await state();
 check(!s3.grounded && s3.y > 0.3, `jumped (y=${s3.y.toFixed(2)})`);
 await sleep(1200);

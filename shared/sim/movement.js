@@ -3,14 +3,17 @@ import { MOVEMENT as M } from '../config/movement.js';
 import { BTN } from '../net/protocol.js';
 
 // Per-tick event flags (cleared at the start of every tick), used for sounds and camera effects.
-export const FX = { JUMP: 1, LAND: 2, DASH: 4, SLIDE: 8, MANTLE: 16 };
+export const FX = { JUMP: 1, LAND: 2, DASH: 4, SLIDE: 8, MANTLE: 16, DJUMP: 32, WALLRUN: 64, WALLJUMP: 128 };
 
 export function createMoveState(x = 0, y = 0, z = 0, yaw = 0) {
   return {
     x, y, z, vx: 0, vy: 0, vz: 0, yaw, pitch: 0,
     grounded: false, crouching: false, h: M.standHeight, eye: M.standEye,
     sliding: false, slideT: 0, slideCd: 0,
-    dashCd: 0, dashUsed: false, airT: 0,
+    dashCd: 0, dashUsed: false, dashT: 0, airT: 0,
+    airJumps: M.doubleJumps,
+    // wall run: active flag, time left, wall normal, speed, wall box index, cooldowns
+    wallRun: 0, wrT: 0, wrNx: 0, wrNz: 0, wrSpeed: 0, wrBox: -1, wrCd: 0, wrSameCd: 0,
     jumpBuf: 0, jumpHeld: false, crouchHeld: false, dashHeld: false,
     mantleT: 0, m0x: 0, m0y: 0, m0z: 0, m1x: 0, m1y: 0, m1z: 0,
     wallNx: 0, wallNz: 0, wallT: 9,
@@ -80,6 +83,9 @@ export function simulateMove(s, b, yaw, pitch, world, dt, opt = {}) {
 
   if (s.slideCd > 0) s.slideCd = Math.max(0, s.slideCd - dt);
   if (s.dashCd > 0) s.dashCd = Math.max(0, s.dashCd - dt);
+  if (s.dashT > 0) s.dashT = Math.max(0, s.dashT - dt);
+  if (s.wrCd > 0) s.wrCd = Math.max(0, s.wrCd - dt);
+  if (s.wrSameCd > 0) s.wrSameCd = Math.max(0, s.wrSameCd - dt);
   if (s.jumpBuf > 0) s.jumpBuf = Math.max(0, s.jumpBuf - dt);
   s.wallT += dt;
 
@@ -111,7 +117,7 @@ export function simulateMove(s, b, yaw, pitch, world, dt, opt = {}) {
     if (s.mantleT === 0) {
       const dx = s.m1x - s.m0x, dz = s.m1z - s.m0z, l = Math.hypot(dx, dz) || 1;
       s.vx = (dx / l) * M.mantleExitSpeed; s.vz = (dz / l) * M.mantleExitSpeed;
-      s.grounded = true; s.dashUsed = false;
+      s.grounded = true; s.dashUsed = false; s.airJumps = M.doubleJumps;
     }
     updateEye(s, dt);
     return s;
@@ -147,10 +153,18 @@ export function simulateMove(s, b, yaw, pitch, world, dt, opt = {}) {
   let hs = Math.hypot(s.vx, s.vz);
   let jumped = false;
 
+  // ---- Dash (ground or air): a short burst along the keys (or the view) that keeps your momentum
+  if (dashPressed && s.dashCd <= 0 && (s.grounded || !s.dashUsed)) {
+    startDash(s, wl > 0 ? wx : -sy, wl > 0 ? wz : -cy);
+    hs = Math.hypot(s.vx, s.vz);
+  }
+
   if (s.grounded) {
     s.airT = 0;
-    // Start a slide: crouch pressed while sprinting fast enough
-    if (!s.sliding && crouchPressed && sprint && hs >= M.slideMinSpeed && s.slideCd <= 0) {
+    s.airJumps = M.doubleJumps;
+    if (s.wallRun) endWallRun(s);
+    // Start a slide: crouch pressed while sprinting (or dashing) fast enough
+    if (!s.sliding && crouchPressed && (sprint || s.dashT > 0) && hs >= M.slideMinSpeed && s.slideCd <= 0) {
       startSlide(s, hs, wx, wz, wl);
       hs = Math.hypot(s.vx, s.vz);
     }
@@ -181,33 +195,34 @@ export function simulateMove(s, b, yaw, pitch, world, dt, opt = {}) {
         if (s.sliding) { s.vx *= M.slideJumpMult; s.vz *= M.slideJumpMult; endSlide(s); }
       }
     } else if (!s.sliding) {
-      applyFriction(s, M.friction, dt);
+      if (s.dashT <= 0) applyFriction(s, M.friction, dt); // no friction during the dash burst
       accelerate(s, wx, wz, wishSpeed, M.groundAccel, dt);
     }
   }
 
   if (!s.grounded) {
     s.airT += dt;
-    if (!jumped) {
-      airAccelerate(s, wx, wz, wishSpeed, dt);
-      // Air dash: once per airtime
-      if (dashPressed && !s.dashUsed && s.dashCd <= 0 && s.airT >= M.dashMinAirTime) {
-        let dx = wx, dz = wz;
-        if (wl === 0) { dx = -sy; dz = -cy; }
-        const along = s.vx * dx + s.vz * dz;
-        const sp = Math.max(M.dashSpeed, along);
-        s.vx = dx * sp; s.vz = dz * sp;
-        if (s.vy < M.dashUpVelocity) s.vy = M.dashUpVelocity;
-        s.dashUsed = true;
-        s.dashCd = M.dashCooldown;
-        s.fx |= FX.DASH;
+    let acted = jumped;
+    if (!acted && s.wallRun) {
+      if (jumpPressed) { wallJump(s); acted = true; }
+      else updateWallRun(s, world, fmove, crouchDown, sy, cy, dt);
+    } else if (!acted && fmove > 0 && s.wrCd <= 0 && s.airT >= M.wallRunMinAirTime) {
+      tryWallRun(s, world, sy, cy);
+    }
+    if (!acted && !s.wallRun) {
+      // Double jump: a fresh press in the air. A press just before landing is left for the bunnyhop.
+      if (jumpPressed && s.airJumps > 0 && s.airT >= M.doubleJumpMinAirTime && !aboutToLand(s, world)) {
+        doubleJump(s, wx, wz, wl);
+      } else {
+        airAccelerate(s, wx, wz, wishSpeed, dt);
       }
       // Wall slide: pushing into a wall we touched recently
       if (s.wallT < 0.1 && wl > 0 && (wx * -s.wallNx + wz * -s.wallNz) > 0.3 && s.vy < -M.wallSlideMaxFall) {
         s.vy = -M.wallSlideMaxFall;
       }
     }
-    s.vy -= M.gravity * dt;
+    const g = s.wallRun ? M.wallRunGravityMult : s.dashT > 0 ? M.dashGravityMult : 1;
+    s.vy -= M.gravity * g * dt;
     if (s.vy < -M.terminalVelocity) s.vy = -M.terminalVelocity;
   }
 
@@ -229,8 +244,10 @@ export function simulateMove(s, b, yaw, pitch, world, dt, opt = {}) {
     s.fx |= FX.LAND;
     s.landSpeed = -vyBefore;
     s.dashUsed = false;
-    // Landed while holding crouch + sprint with speed: go straight into a slide
-    if (crouchDown && sprint && !s.sliding && s.slideCd <= 0 && Math.hypot(s.vx, s.vz) >= M.slideMinSpeed) {
+    s.airJumps = M.doubleJumps;
+    if (s.wallRun) endWallRun(s);
+    // Landed while holding crouch + sprint (or dashing) with speed: go straight into a slide
+    if (crouchDown && (sprint || s.dashT > 0) && !s.sliding && s.slideCd <= 0 && Math.hypot(s.vx, s.vz) >= M.slideMinSpeed) {
       startSlide(s, Math.hypot(s.vx, s.vz), wx, wz, wl);
     }
     // Bunnyhop: jump buffered before landing → jump this same tick, so friction never applies
@@ -249,6 +266,141 @@ export function simulateMove(s, b, yaw, pitch, world, dt, opt = {}) {
 
   updateEye(s, dt);
   return s;
+}
+
+/** Dash along (dx, dz): at least dashSpeed that way, half the old sideways velocity kept. */
+function startDash(s, dx, dz) {
+  const along = s.vx * dx + s.vz * dz;
+  const px = s.vx - dx * along, pz = s.vz - dz * along;
+  const sp = Math.max(M.dashSpeed, along);
+  s.vx = dx * sp + px * M.dashKeepSideways;
+  s.vz = dz * sp + pz * M.dashKeepSideways;
+  if (!s.grounded) {
+    if (s.vy < M.dashUpVelocity) s.vy = M.dashUpVelocity;
+    s.dashUsed = true;
+  }
+  if (s.wallRun) endWallRun(s);
+  s.dashT = M.dashDuration;
+  s.dashCd = M.dashCooldown;
+  s.fx |= FX.DASH;
+}
+
+/** Falling and about to touch the ground within the jump buffer window? */
+function aboutToLand(s, world) {
+  if (s.vy >= 0) return false;
+  const floor = world.supportHeight(s.x, s.z, M.halfWidth, s.y + 1e-3);
+  return s.y - floor <= -s.vy * M.jumpBuffer + 0.05;
+}
+
+function doubleJump(s, wx, wz, wl) {
+  s.vy = M.doubleJumpVelocity;
+  if (wl > 0) {
+    // turn the horizontal velocity part of the way toward the keys, keeping the speed
+    const sp = Math.hypot(s.vx, s.vz);
+    if (sp > 0.5) {
+      let nx = s.vx / sp + (wx - s.vx / sp) * M.doubleJumpSteer, nz = s.vz / sp + (wz - s.vz / sp) * M.doubleJumpSteer;
+      const nl = Math.hypot(nx, nz) || 1;
+      s.vx = (nx / nl) * sp; s.vz = (nz / nl) * sp;
+    }
+  }
+  s.airJumps--;
+  s.jumpBuf = 0;
+  s.fx |= FX.DJUMP;
+}
+
+/** Height range of the body that a wall must cover. */
+function wallOverlap(s, b) {
+  return Math.min(s.y + s.h - 0.1, b.maxy) - Math.max(s.y + 0.1, b.miny);
+}
+
+/**
+ * Gap between the side of the body and a box face, for a wall whose normal is (nx, nz), or Infinity if
+ * we're not alongside that face.
+ */
+function wallGap(s, b, nx, nz, margin) {
+  const half = M.halfWidth;
+  if (nx) {
+    if (!(s.z > b.minz - margin && s.z < b.maxz + margin)) return Infinity;
+    return nx > 0 ? (s.x - half) - b.maxx : b.minx - (s.x + half);
+  }
+  if (!(s.x > b.minx - margin && s.x < b.maxx + margin)) return Infinity;
+  return nz > 0 ? (s.z - half) - b.maxz : b.minz - (s.z + half);
+}
+
+/** Look for a runnable wall beside us that we're moving along, and start running on it. */
+function tryWallRun(s, world, sy, cy) {
+  const fx = -sy, fz = -cy;
+  let best = -1, bestSp = 0, bnx = 0, bnz = 0;
+  const boxes = world.boxes;
+  for (let i = 0; i < boxes.length; i++) {
+    const b = boxes[i];
+    if (!b.run || (i === s.wrBox && s.wrSameCd > 0)) continue;
+    if (wallOverlap(s, b) < M.wallRunMinOverlap) continue;
+    for (const [nx, nz] of SIDES) {
+      const gap = wallGap(s, b, nx, nz, -0.1);
+      if (!(gap > -0.02 && gap < M.wallRunProbe)) continue;
+      let tx = -nz, tz = nx;
+      let along = s.vx * tx + s.vz * tz;
+      if (along < 0) { tx = -tx; tz = -tz; along = -along; }
+      if (along < M.wallRunMinSpeed || fx * tx + fz * tz < M.wallRunMinLook) continue;
+      if (along > bestSp) { bestSp = along; best = i; bnx = nx; bnz = nz; }
+    }
+  }
+  if (best < 0) return false;
+  s.wallRun = 1;
+  s.wrT = M.wallRunMaxTime;
+  s.wrNx = bnx; s.wrNz = bnz;
+  s.wrBox = best;
+  s.wrSpeed = Math.min(Math.max(bestSp, M.wallRunSpeed), M.wallRunMaxSpeed);
+  s.vy = Math.min(Math.max(s.vy, M.wallRunStartUp), M.wallRunStartUpMax);
+  wallRunVelocity(s);
+  s.airJumps = M.doubleJumps;
+  s.dashUsed = false;
+  s.fx |= FX.WALLRUN;
+  return true;
+}
+const SIDES = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+
+function updateWallRun(s, world, fmove, crouchDown, sy, cy, dt) {
+  s.wrT -= dt;
+  const b = world.boxes[s.wrBox];
+  let ok = !!b && s.wrT > 0 && fmove > 0 && !crouchDown;
+  if (ok) {
+    if (wallOverlap(s, b) < M.wallRunMinOverlap * 0.6) ok = false; // ran past the top or bottom
+    else if (!(wallGap(s, b, s.wrNx, s.wrNz, M.halfWidth * 0.5) < M.wallRunProbe + 0.05)) ok = false; // wall ended
+    else if (-sy * s.wrNx + -cy * s.wrNz > M.wallRunReleaseLook) ok = false; // turned away from the wall
+  }
+  if (!ok) { endWallRun(s); return; }
+  wallRunVelocity(s);
+}
+
+/** Constant speed along the wall in the direction of travel, pressed lightly into it so contact holds. */
+function wallRunVelocity(s) {
+  let tx = -s.wrNz, tz = s.wrNx;
+  if (s.vx * tx + s.vz * tz < 0) { tx = -tx; tz = -tz; }
+  s.vx = tx * s.wrSpeed - s.wrNx * 0.6;
+  s.vz = tz * s.wrSpeed - s.wrNz * 0.6;
+}
+
+function endWallRun(s) {
+  s.wallRun = 0;
+  s.wrCd = M.wallRunCooldown;
+  s.wrSameCd = M.wallRunSameWallCooldown;
+}
+
+/** Jump off the wall: out and up, keeping the run speed; refills the air jump and dash. */
+function wallJump(s) {
+  const tx = -s.wrNz, tz = s.wrNx;
+  const along = (s.vx * tx + s.vz * tz) * M.wallJumpKeep;
+  s.vx = tx * along + s.wrNx * M.wallJumpOut;
+  s.vz = tz * along + s.wrNz * M.wallJumpOut;
+  s.vy = M.wallJumpUp;
+  endWallRun(s);
+  s.wrCd = M.wallJumpReattach;
+  s.airJumps = M.doubleJumps;
+  s.dashUsed = false;
+  s.jumpBuf = 0;
+  s.fx |= FX.WALLJUMP;
 }
 
 function startSlide(s, hs, wx, wz, wl) {

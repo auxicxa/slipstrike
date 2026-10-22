@@ -148,6 +148,9 @@ export class OnlineMatch {
       if (e.fx & FX.LAND) sfx.land(0.6, pos);
       if (e.fx & FX.DASH) sfx.dash(pos);
       if (e.fx & FX.SLIDE) sfx.slide(pos);
+      if (e.fx & FX.DJUMP) sfx.doubleJump(pos);
+      if (e.fx & FX.WALLJUMP) sfx.wallJump(pos);
+      if (e.fx & FX.WALLRUN) sfx.wallRun(pos);
     }
 
     if (m.ph !== this.phase) this.phase = m.ph;
@@ -344,6 +347,7 @@ export class OnlineMatch {
       x: p.x + (c.x - p.x) * a + this.err.x, y: p.y + (c.y - p.y) * a + this.err.y, z: p.z + (c.z - p.z) * a + this.err.z,
       eye: p.eye + (c.eye - p.eye) * a,
       vx: c.vx, vz: c.vz, vy: c.vy, grounded: c.grounded, sliding: c.sliding, dashCd: c.dashCd, dashUsed: c.dashUsed,
+      dashT: c.dashT, airJumps: c.airJumps, wallRun: c.wallRun, wrT: c.wrT, wrNx: c.wrNx, wrNz: c.wrNz,
       alive: this.me.alive, hp: this.me.hp, ws: this.me.ws,
     };
   }

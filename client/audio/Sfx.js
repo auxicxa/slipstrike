@@ -155,6 +155,30 @@ class Sfx {
   }
   slide(pos = null) { const d = this.out(pos ? 0.45 : 0.3, pos, 0.8); if (!d) return; this.noiseBurst(d, this.ctx.currentTime, 0.7, { type: 'bandpass', freq: 1800, q: 0.6, freqEnd: 500, gain: 0.5, attack: 0.03 }); }
   dash(pos = null) { const d = this.out(pos ? 0.6 : 0.45, pos, 0.5); if (!d) return; const t = this.ctx.currentTime; this.noiseBurst(d, t, 0.35, { type: 'bandpass', freq: 400, q: 0.8, freqEnd: 2500, gain: 0.7, attack: 0.02 }); this.tone(d, t, 0.25, { type: 'sine', freq: 220, freqEnd: 520, gain: 0.15, attack: 0.02 }); }
+  /** Air jump: a soft upward whoomp. */
+  doubleJump(pos = null) {
+    const d = this.out(pos ? 0.5 : 0.4, pos, 0.4); if (!d) return;
+    const t = this.ctx.currentTime;
+    this.noiseBurst(d, t, 0.22, { type: 'bandpass', freq: 700, q: 0.9, freqEnd: 1800, gain: 0.6, attack: 0.01 });
+    this.tone(d, t, 0.18, { type: 'sine', freq: 160, freqEnd: 330, gain: 0.25, attack: 0.01 });
+  }
+  /** Catching a wall: a short scrape. */
+  wallRun(pos = null) {
+    const d = this.out(pos ? 0.45 : 0.35, pos, 0.4); if (!d) return;
+    this.noiseBurst(d, this.ctx.currentTime, 0.28, { type: 'bandpass', freq: 2600, q: 1.2, freqEnd: 1200, gain: 0.5, attack: 0.01 });
+  }
+  /** A quick footstep on the wall while running along it. */
+  wallStep() {
+    const d = this.out(0.22, null, 0.15); if (!d) return;
+    this.noiseBurst(d, this.ctx.currentTime, 0.06, { type: 'bandpass', freq: 1300, q: 1.5, gain: 0.8, attack: 0.003 });
+  }
+  /** Kicking off a wall. */
+  wallJump(pos = null) {
+    const d = this.out(pos ? 0.55 : 0.45, pos, 0.4); if (!d) return;
+    const t = this.ctx.currentTime;
+    this.noiseBurst(d, t, 0.08, { type: 'lowpass', freq: 900, gain: 0.9, attack: 0.002 });
+    this.noiseBurst(d, t + 0.02, 0.25, { type: 'bandpass', freq: 900, q: 0.8, freqEnd: 2600, gain: 0.5, attack: 0.01 });
+  }
   mantle() { const d = this.out(0.3, null, 0.3); if (!d) return; this.noiseBurst(d, this.ctx.currentTime, 0.12, { type: 'bandpass', freq: 700, q: 1, gain: 0.6 }); }
 
   hit(head = false) {

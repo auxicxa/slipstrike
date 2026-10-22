@@ -146,6 +146,19 @@ export class Effects {
     }
   }
 
+  /** A ring of dust thrown out sideways from a point (air jumps, wall jumps). */
+  puff(p, color = [0.85, 0.85, 0.85], count = 12, speed = 2.6) {
+    count = Math.max(1, Math.round(count * this.scale));
+    for (let k = 0; k < count; k++) {
+      const i = this.pNext; this.pNext = (this.pNext + 1) % MAX_PARTICLES;
+      const a = (k / count) * Math.PI * 2 + Math.random() * 0.4;
+      this.pPos[i * 3] = p[0]; this.pPos[i * 3 + 1] = p[1]; this.pPos[i * 3 + 2] = p[2];
+      this.pVel[i * 3] = Math.cos(a) * speed; this.pVel[i * 3 + 1] = 1.2 + Math.random() * 1.2; this.pVel[i * 3 + 2] = Math.sin(a) * speed;
+      this.pCol[i * 3] = color[0]; this.pCol[i * 3 + 1] = color[1]; this.pCol[i * 3 + 2] = color[2];
+      this.pLife[i] = 0.3 + Math.random() * 0.2;
+    }
+  }
+
   muzzle(pos) {
     const f = this.flashes[this.fNext]; this.fNext = (this.fNext + 1) % this.flashes.length;
     f.s.position.set(pos[0], pos[1], pos[2]);

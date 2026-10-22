@@ -27,7 +27,7 @@ const toast = await page.textContent('#toast');
 check(b.reload[0] === 'KeyW' && !b.forward.includes('KeyW'), `conflict resolved: W moved to Reload, Move forward now ${JSON.stringify(b.forward)}`);
 check(/moved from "Move forward"/.test(toast), `conflict reported to the player: "${toast}"`);
 // Mouse button binding: bind Scope second slot to right click (already) -> bind Dash to Mouse 4 (button 3)
-const dashRow = page.locator('tr', { has: page.locator('td.act', { hasText: /^Air dash$/ }) });
+const dashRow = page.locator('tr', { has: page.locator('td.act', { hasText: /^Dash \(ground and air\)$/ }) });
 await dashRow.locator('button.bind-btn').nth(1).click();
 await sleep(50);
 await page.mouse.down({ button: 'middle' }); await page.mouse.up({ button: 'middle' });

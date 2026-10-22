@@ -9,7 +9,7 @@ const m = new MapBuilder('kiln', 'Kiln', { sky: 0xf2c79b, fog: 0xe9b98c, fogNear
 m.floor(-17, 0, 17, 23);
 m.box(-18, 0, 23, 18, 8, 24, WALL);
 m.box(-18, 0, 0, -17, 8, 23, WALL);
-m.box(17, 0, 0, 18, 8, 23, WALL);
+m.box(17, 0, 0, 18, 8, 23, WALL).run(3); // all outer walls are runnable
 
 // Spawn cover
 m.block(-5, 15.5, 3.2, 1.2, 1.3, LOW);
@@ -27,7 +27,7 @@ m.block(11.2, 10.4, 2.2, 2.2, 2.3, CRATE);
 m.block(12, 3.2, 2, 2, 4.5, TOWER);
 
 // Mid: a tall tower you can't climb, with low ledges either side
-m.block(0, 0, 4, 4, 3.4, TOWER);
+m.block(0, 0, 4, 4, 3.4, TOWER).run();
 m.block(0, 4.2, 6, 1, 1.0, LOW);
 m.block(-6.5, 7, 1, 5, 1.0, LOW);
 m.block(6, 13, 4, 1, 1.1, LOW);

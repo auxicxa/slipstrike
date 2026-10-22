@@ -297,9 +297,13 @@ export class Game {
     // Landing dip: a damped spring pulled down on landing
     this.dipVel += (-this.landDip * 120 - this.dipVel * 16) * dt;
     this.landDip += this.dipVel * dt;
-    // Slide tilt
-    const tiltTarget = v.sliding ? M.slideTiltDeg * DEG : 0;
-    this.tilt += (tiltTarget - this.tilt) * Math.min(1, dt * 10);
+    // Slide tilt, and a roll away from the wall while wall running
+    let tiltTarget = v.sliding ? M.slideTiltDeg * DEG : 0;
+    if (v.wallRun) {
+      const wallLeft = v.wrNx * Math.cos(this.yaw) - v.wrNz * Math.sin(this.yaw) > 0; // normal points to our right
+      tiltTarget = (wallLeft ? -1 : 1) * M.wallRunTiltDeg * DEG;
+    }
+    this.tilt += (tiltTarget - this.tilt) * Math.min(1, dt * (v.wallRun ? 8 : 10));
     // FOV widening with speed
     const { zoom } = this.zoomInfo(ws);
     const sp = clamp((speed - M.fovSpeedMin) / (M.fovSpeedMax - M.fovSpeedMin), 0, 1);
@@ -310,7 +314,15 @@ export class Game {
     if (Math.abs(cam.fov - effFov) > 0.01) { cam.fov = effFov; cam.updateProjectionMatrix(); }
     // Head bob (tiny, off while aiming)
     let bob = 0;
-    if (v.grounded && !v.sliding && speed > 0.5) {
+    if (v.wallRun) {
+      // quick steps along the wall, with sparks where the feet hit it
+      this.stepDist += speed * dt;
+      if (this.stepDist > M.footstepDistance * 0.7) {
+        this.stepDist = 0;
+        sfx.wallStep();
+        this.fx.impact([v.x - v.wrNx * M.halfWidth, v.y + 0.25, v.z - v.wrNz * M.halfWidth], [v.wrNx, 0.3, v.wrNz], [1, 0.82, 0.5], 3);
+      }
+    } else if (v.grounded && !v.sliding && speed > 0.5) {
       this.stepDist += speed * dt;
       bob = Math.sin(this.stepDist * M.bobFreq * Math.PI * 0.5) * M.bobAmount * Math.min(1, speed / 8) * (1 - (ws?.adsT || 0));
       if (this.stepDist > M.footstepDistance) { this.stepDist -= M.footstepDistance; sfx.footstep(null, speed > 7.5); }
@@ -351,7 +363,10 @@ export class Game {
       const v = ms.landSpeed;
       if (v > 3) { this.dipVel -= Math.min(M.landDipMax * 16, v * M.landDipScale * 16); sfx.land(v / 12); this.vm.land(v); }
     }
-    if (ms.fx & FX.DASH) { sfx.dash(); this.fovKick = 6; }
+    if (ms.fx & FX.DASH) { sfx.dash(); this.fovKick = M.dashFovKick; this.hud.speedBurst(); }
+    if (ms.fx & FX.DJUMP) { sfx.doubleJump(); this.fx.puff([ms.x, ms.y + 0.05, ms.z], [0.85, 0.88, 0.95], 14); }
+    if (ms.fx & FX.WALLRUN) { sfx.wallRun(); this.stepDist = 0; }
+    if (ms.fx & FX.WALLJUMP) { sfx.wallJump(); this.fovKick = Math.max(this.fovKick, 4); this.fx.puff([ms.x, ms.y + 0.8, ms.z], [0.9, 0.85, 0.75], 10); }
     if (ms.fx & FX.SLIDE) sfx.slide();
     if (ms.fx & FX.MANTLE) sfx.mantle();
     if (ws.fx & WFX.SWAP) { sfx.swap(); this.vm.setWeapon(currentWeapon(ws).id); this.resetAim(); }
