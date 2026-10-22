@@ -26,6 +26,8 @@ app.get('/healthz', (_req, res) => res.json({ ok: true }));
 app.get('/stats', (_req, res) => res.json(rooms.stats()));
 
 if (DEV) {
+  // Dev-only model viewer (client/viewer/): not part of the production build
+  app.use((req, res, next) => (req.originalUrl.split('?')[0] === '/viewer' ? res.redirect('/viewer/') : next()));
   const { createServer } = await import('vite');
   const vite = await createServer({
     configFile: path.join(ROOT, 'vite.config.js'),

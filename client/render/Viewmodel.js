@@ -9,7 +9,7 @@ const DARK = 0x2b2f38, MID = 0x4a505c, LIGHT = 0x8a93a3, ACC = 0xff8a3d, WOOD = 
 
 const VM_SCALE = 0.55;
 
-const MODELS = {
+export const MODELS = {
   rifle: {
     parts: [
       { s: [0.06, 0.08, 0.42], p: [0, 0, -0.05], c: DARK },
