@@ -40,9 +40,29 @@ export function weaponSpeedMult(ws) {
   return w.moveMult || 1;
 }
 
+/** Can this weapon aim down sights at all? (The knife never can.) */
+export function canAds(w) {
+  return w.kind === 'gun' && (w.adsZoom ?? 1) >= 1;
+}
+
 export function isScoped(ws) {
+  return canAds(currentWeapon(ws)) && ws.adsT > 0.5;
+}
+
+/**
+ * The one place that decides what aiming looks like, used by the HUD (scope overlay), the viewmodel
+ * (hidden while scoped), the camera (zoom/FOV) and look sensitivity. Always strict booleans/numbers:
+ * only a weapon whose config says `scope: true` can ever show a scope overlay.
+ */
+export function aimView(ws) {
   const w = currentWeapon(ws);
-  return w.kind === 'gun' && ws.adsT > 0.5;
+  if (!canAds(w)) return { weapon: w, ads: 0, scoped: false, zoom: 1 };
+  const a = Math.max(0, Math.min(1, ws.adsT || 0));
+  const scope = w.scope === true;
+  const scoped = scope && a > 0.85;
+  // Scoped rifles snap to full zoom once the scope is up; other guns zoom smoothly with ADS
+  const zoom = 1 + (w.adsZoom - 1) * (scope ? (scoped ? 1 : a * 0.3) : a);
+  return { weapon: w, ads: a, scoped, zoom };
 }
 
 function switchTo(ws, slot) {
@@ -107,12 +127,13 @@ export function tickWeapon(ws, b, wsel, ms, pid, dt, canFight = true) {
   if (w.kind === 'gun' && ws.reloadT <= 0 && ws.swapT <= 0 && ws.ammo[ws.cur] < w.mag &&
       ((b & BTN.RELOAD) || (ws.ammo[ws.cur] === 0 && ws.cooldown <= 0))) {
     ws.reloadT = w.reload;
+    ws.adsT = 0; // reloading always drops the sights
     ws.fx |= WFX.RELOAD;
     ws.bloom = 0;
   }
 
   // ADS
-  if (w.kind === 'gun') {
+  if (canAds(w)) {
     const want = adsDown && ws.reloadT <= 0 && ws.swapT <= 0 && !ms.sliding;
     const rate = dt / w.adsTime;
     ws.adsT = want ? Math.min(1, ws.adsT + rate) : Math.max(0, ws.adsT - rate * 1.5);

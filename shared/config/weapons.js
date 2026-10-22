@@ -63,6 +63,7 @@ export const WEAPONS = {
   knife: {
     id: 'knife', name: 'Knife', slot: 'melee', kind: 'melee',
     swap: 0, moveMult: 1.22, // see MOVEMENT.knifeSpeedMult (kept equal)
+    scope: false, adsZoom: 1, // the knife never aims: the ADS key is its heavy attack
     stab: { damage: 35, range: 2.0, interval: 0.35, windup: 0 },
     heavy: { damage: 70, range: 2.2, interval: 1.0, windup: 0.35 },
     headMult: 1, legMult: 1,

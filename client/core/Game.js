@@ -14,7 +14,7 @@ import { WEAPONS } from '../../shared/config/weapons.js';
 import { TEAM_COLORS } from '../../shared/config/game.js';
 import { BTN, WSEL_LAST } from '../../shared/net/protocol.js';
 import { FX } from '../../shared/sim/movement.js';
-import { WFX, currentWeapon } from '../../shared/sim/weapons.js';
+import { WFX, currentWeapon, aimView, canAds } from '../../shared/sim/weapons.js';
 import { rayVsPlayer } from '../../shared/sim/hitscan.js';
 import { DEG, clamp, dirFromAngles, wrapAngle } from '../../shared/sim/math.js';
 
@@ -92,8 +92,8 @@ export class Game {
     if (this.onPauseChange) this.onPauseChange(p);
   }
 
-  /** Called when the session (re)spawns the local player. */
-  setView(yaw, pitch = 0) { this.yaw = yaw; this.pitch = pitch; }
+  /** Called when the session (re)spawns the local player (also every round start). */
+  setView(yaw, pitch = 0) { this.yaw = yaw; this.pitch = pitch; this.resetAim(); }
 
   onAction(a, down) {
     if (!this.running) return;
@@ -120,10 +120,12 @@ export class Game {
       if (input.active('sprint')) b |= BTN.SPRINT;
       if (input.active('dash')) b |= BTN.DASH;
       if (input.active('fire')) b |= BTN.FIRE;
-      // The knife's heavy attack lives on the ADS key: always treat it as a plain press there
+      // The knife's heavy attack lives on the ADS key: always treat it as a plain press there, and never
+      // let a knife press leave toggle-mode aiming switched on for the next weapon.
       const lp = this.session?.localPlayer?.();
-      const knife = lp?.ws && currentWeapon(lp.ws).kind === 'melee';
-      if (knife ? input.active('ads') : input.adsActive()) b |= BTN.ADS;
+      const noAds = lp?.ws && !canAds(currentWeapon(lp.ws));
+      if (noAds) this.resetAim();
+      if (noAds ? input.active('ads') : input.adsActive()) b |= BTN.ADS;
       if (input.active('reload')) b |= BTN.RELOAD;
       if (input.wasPressed('slot1')) w = 1;
       else if (input.wasPressed('slot2')) w = 2;
@@ -136,13 +138,15 @@ export class Game {
   }
 
   // ------------------------------------------------------------------ look
+  /** Zoom (FOV and sensitivity scale) comes from the same aimView() the HUD uses. */
   zoomInfo(ws) {
     if (!ws) return { zoom: 1, ads: 0 };
-    const w = currentWeapon(ws);
-    const a = ws.adsT || 0;
-    const zoom = w.kind === 'gun' ? 1 + (w.adsZoom - 1) * (w.scope ? (a > 0.85 ? 1 : a * 0.3) : a) : 1;
-    return { zoom, ads: a, w };
+    const v = aimView(ws);
+    return { zoom: v.zoom, ads: v.ads, w: v.weapon };
   }
+
+  /** Forget a toggled-on aim (toggle mode), so it never carries over to another weapon or life. */
+  resetAim() { input.toggles.ads = false; }
 
   updateLook(dt, ws) {
     let [mdx, mdy] = input.takeMouse();
@@ -234,6 +238,7 @@ export class Game {
     }
     sfx.setListener(cam.position.x, cam.position.y, cam.position.z, cam.rotation.y);
 
+    if (view && !view.alive) this.resetAim(); // dead: nothing stays scoped
     const showVm = !!(view && view.alive);
     if (showVm) {
       const w = currentWeapon(ws);
@@ -330,8 +335,8 @@ export class Game {
     if (ms.fx & FX.DASH) { sfx.dash(); this.fovKick = 6; }
     if (ms.fx & FX.SLIDE) sfx.slide();
     if (ms.fx & FX.MANTLE) sfx.mantle();
-    if (ws.fx & WFX.SWAP) { sfx.swap(); this.vm.setWeapon(currentWeapon(ws).id); }
-    if (ws.fx & WFX.RELOAD) sfx.reload();
+    if (ws.fx & WFX.SWAP) { sfx.swap(); this.vm.setWeapon(currentWeapon(ws).id); this.resetAim(); }
+    if (ws.fx & WFX.RELOAD) { sfx.reload(); this.resetAim(); }
     if (ws.fx & WFX.RELOADED) sfx.reloaded();
     if (ws.fx & WFX.DRY) sfx.dry();
     if (ws.fx & WFX.STAB) { this.vm.stab(); sfx.knife(null, false); }

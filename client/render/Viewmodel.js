@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { boxesGeometry, flatMat } from './geo.js';
 import { WEAPONS } from '../../shared/config/weapons.js';
+import { aimView } from '../../shared/sim/weapons.js';
 import { MOVEMENT as M } from '../../shared/config/movement.js';
 
 const DARK = 0x2b2f38, MID = 0x4a505c, LIGHT = 0x8a93a3, ACC = 0xff8a3d, WOOD = 0x8a5a33, GLOVE = 0x23262d, STEEL = 0xd6dbe3;
@@ -131,12 +132,13 @@ export class Viewmodel {
     this.t += dt;
 
     // ADS blend (sniper hides the model when scoped)
-    const a = ws.adsT;
+    const aim = aimView(ws);
+    const a = aim.ads;
     const ease = a * a * (3 - 2 * a);
     const px = def.hip[0] + (def.ads[0] - def.hip[0]) * ease;
     const py = def.hip[1] + (def.ads[1] - def.hip[1]) * ease;
     const pz = def.hip[2] + (def.ads[2] - def.hip[2]) * ease;
-    mesh.visible = this.visible && !(w.scope && a > 0.85);
+    mesh.visible = this.visible && !aim.scoped;
 
     // Bob
     const moving = s.grounded && s.speed > 0.5 && !s.sliding;
@@ -177,7 +179,7 @@ export class Viewmodel {
     // Flash at the muzzle
     if (this.flashT > 0) {
       this.flashT -= dt;
-      this.flash.visible = mesh.visible || w.scope ? !(w.scope && a > 0.85) : false;
+      this.flash.visible = !aim.scoped && mesh.visible;
       const m = def.muzzle;
       const v = new THREE.Vector3(m[0], m[1], m[2]).multiplyScalar(VM_SCALE).applyEuler(mesh.rotation).add(mesh.position);
       this.flash.position.copy(v);

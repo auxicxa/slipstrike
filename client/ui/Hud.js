@@ -6,6 +6,7 @@ import { binds } from '../core/Bindings.js';
 import { WEAPONS } from '../../shared/config/weapons.js';
 import { MOVEMENT as M } from '../../shared/config/movement.js';
 import { MAX_HP, QUICK_CHAT, TEAM_NAMES } from '../../shared/config/game.js';
+import { aimView } from '../../shared/sim/weapons.js';
 
 const WEAPON_ICONS = { rifle: 'AR', shotgun: 'SG', sniper: 'SR', pistol: 'PS', revolver: 'RV', knife: 'KN' };
 
@@ -215,10 +216,11 @@ export class Hud {
           h('span.wl-key', binds.label('slot' + (i + 1))), h('span.wl-name', WEAPONS[id].name))));
       }
       this.ammo.style.display = '';
-      // Scope overlay
-      const scoped = w.scope && ws.adsT > 0.85;
-      this.scope.classList.toggle('show', scoped);
-      this.crosshair.style.display = scoped || (w.kind === 'gun' && ws.adsT > 0.6 && w.id !== 'shotgun') ? 'none' : '';
+      // Scope overlay: decided only by aimView(), which is false for anything without a real scope.
+      // (Always pass a boolean to classList.toggle: an undefined second argument means "flip".)
+      const aim = aimView(ws);
+      this.scope.classList.toggle('show', aim.scoped === true);
+      this.crosshair.style.display = aim.scoped || (aim.ads > 0.6 && w.id !== 'shotgun') ? 'none' : '';
       // Dash
       const cd = view.dashCd;
       this.dashFill.style.width = `${(1 - cd / M.dashCooldown) * 100}%`;
