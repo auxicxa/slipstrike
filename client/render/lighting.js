@@ -1,6 +1,21 @@
 // Lighting rigs shared by the game and the /viewer page, so models are judged under the light they
 // will actually be seen in.
 import * as THREE from 'three';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
+
+const envCache = new WeakMap();
+/**
+ * A soft studio environment map (generated once, no image files). Metals and glossy surfaces need
+ * something to reflect, or they render almost black. Returns the texture to use as scene.environment.
+ */
+export function environmentFor(renderer) {
+  if (envCache.has(renderer)) return envCache.get(renderer);
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  const tex = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+  pmrem.dispose();
+  envCache.set(renderer, tex);
+  return tex;
+}
 
 /** Renderer colour pipeline: sRGB output with ACES filmic tone mapping. */
 export function configureRenderer(renderer, exposure = 1.0) {

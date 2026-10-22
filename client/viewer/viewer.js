@@ -18,7 +18,14 @@ const label = Object.assign(document.createElement('div'), { id: 'label' });
 stage.append(label);
 
 const scene = new THREE.Scene();
+import { environmentFor } from '../render/lighting.js';
+scene.environment = environmentFor(renderer);
+scene.environmentIntensity = 0.55;
 const camera = new THREE.PerspectiveCamera(40, 1, 0.01, 200);
+// First-person previews use the game's viewmodel camera: at the origin, looking down -Z
+const fpCamera = new THREE.PerspectiveCamera(62, 1, 0.01, 10);
+const cross = Object.assign(document.createElement('div'), { id: 'cross' });
+stage.append(cross);
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 
@@ -31,7 +38,7 @@ const grid = new THREE.GridHelper(12, 24, 0x5a6270, 0x454c58);
 grid.position.y = 0.001;
 scene.add(grid);
 
-const state = { id: null, obj: null, turntable: true, wire: false, sockets: false, light: 'game', pose: null, team: 0, t: 0 };
+const state = { id: null, obj: null, fp: false, turntable: true, wire: false, sockets: false, light: 'game', pose: null, team: 0, t: 0 };
 let rig = null;
 function setLight(p) {
   state.light = p;
@@ -46,8 +53,21 @@ scene.add(holder);
 const markers = new THREE.Group();
 scene.add(markers);
 
+/** Bounds of the visible meshes only (rigs keep hidden models around). */
+function visibleBox(root) {
+  const box = new THREE.Box3(), b = new THREE.Box3();
+  root.updateMatrixWorld(true);
+  root.traverseVisible((o) => {
+    if (!o.isMesh || !o.geometry) return;
+    if (o.parent?.name === 'forearm') return; // frame a first-person rig on the weapon and hands
+    if (!o.geometry.boundingBox) o.geometry.computeBoundingBox();
+    box.union(b.copy(o.geometry.boundingBox).applyMatrix4(o.matrixWorld));
+  });
+  return box;
+}
+
 function fit() {
-  const box = new THREE.Box3().setFromObject(holder);
+  const box = visibleBox(holder);
   const size = box.getSize(new THREE.Vector3());
   const center = box.getCenter(new THREE.Vector3());
   const r = Math.max(size.length() / 2, 0.05);
@@ -69,7 +89,7 @@ const VIEWS = {
   front: [0, 0.15, -1], side: [1, 0.12, 0], back: [0, 0.2, 1], top: [0.001, 1, 0.001], three: [0.75, 0.45, -0.8],
 };
 function view(name) {
-  const box = new THREE.Box3().setFromObject(holder);
+  const box = visibleBox(holder);
   const center = box.getCenter(new THREE.Vector3());
   const r = Math.max(box.getSize(new THREE.Vector3()).length() / 2, 0.05);
   const dist = r / Math.sin((camera.fov * Math.PI) / 360) * 1.15;
@@ -103,6 +123,10 @@ function show(id, opts = {}) {
   if (!e) throw new Error('no model ' + id);
   if (state.obj) { holder.remove(state.obj); }
   state.id = id;
+  state.fp = !!e.fp && !state.fpOrbit; // fpOrbit: inspect a first-person rig from outside
+  floor.visible = grid.visible = !state.fp;
+  cross.style.display = state.fp ? 'block' : 'none';
+  scene.background = state.fp ? new THREE.Color(0x7d8ea6) : null;
   if (opts.team !== undefined) state.team = opts.team;
   state.pose = opts.pose ?? (e.poses ? e.poses[0] : null);
   state.t = 0;
@@ -112,8 +136,10 @@ function show(id, opts = {}) {
   holder.rotation.set(0, 0, 0);
   holder.add(obj);
   e.update?.(obj, 0, state.pose, 0);
-  const { r } = fit();
-  state.markerScale = Math.max(1, r / 0.3);
+  if (!state.fp) {
+    const { r } = fit();
+    state.markerScale = Math.max(1, r / 0.3);
+  } else state.markerScale = 0.4;
   applyWire();
   showSockets();
   label.textContent = e.label;
@@ -124,7 +150,7 @@ function show(id, opts = {}) {
 
 function stats() {
   const e = getModel(state.id);
-  const box = new THREE.Box3().setFromObject(holder);
+  const box = visibleBox(holder);
   const size = box.getSize(new THREE.Vector3());
   return {
     id: state.id, triangles: countTriangles(state.obj), meshes: countMeshes(state.obj),
@@ -212,6 +238,7 @@ function resize() {
   renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
   renderer.setSize(w, h);
   camera.aspect = w / h; camera.updateProjectionMatrix();
+  fpCamera.aspect = w / h; fpCamera.updateProjectionMatrix();
 }
 addEventListener('resize', resize);
 
@@ -221,12 +248,13 @@ function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
   state.t += dt;
-  if (state.turntable) holder.rotation.y += dt * 0.5;
+  if (state.turntable && !state.fp) holder.rotation.y += dt * 0.5;
+  if (state.fp) holder.rotation.set(0, 0, 0);
   const e = state.id && getModel(state.id);
   if (e?.update && state.obj) { e.update(state.obj, state.t, state.pose, dt); if (state.sockets) showSockets(); }
   controls.update();
   renderer.info.reset();
-  renderer.render(scene, camera);
+  renderer.render(scene, state.fp ? fpCamera : camera);
   statT += dt;
   if (statT > 0.5) { statT = 0; renderStats(); }
 }
@@ -241,8 +269,8 @@ requestAnimationFrame(frame);
 window.__viewer = {
   list: () => listModels().map((e) => ({ id: e.id, group: e.group, label: e.label, poses: e.poses || null, teams: !!e.teams, budget: e.budget ?? null })),
   show: (id, opts) => { const s = show(id, opts); renderModels(); return s; },
-  view, stats,
-  set: (o) => { Object.assign(state, o); applyWire(); showSockets(); renderControls(); if (o.light) setLight(o.light); },
+  view, stats, obj: () => state.obj,
+  set: (o) => { Object.assign(state, o); if ('fpOrbit' in o && state.id) show(state.id); applyWire(); showSockets(); renderControls(); if (o.light) setLight(o.light); },
   pose: (p, t = 0.4) => { state.pose = p; state.t = t; const e = getModel(state.id); e?.update?.(state.obj, t, p, 0); if (state.sockets) showSockets(); },
-  render: () => { controls.update(); renderer.render(scene, camera); },
+  render: () => { controls.update(); renderer.render(scene, state.fp ? fpCamera : camera); },
 };

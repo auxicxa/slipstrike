@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { boxesGeometry, flatMat } from './geo.js';
 import { MOVEMENT as M } from '../../shared/config/movement.js';
+import { weaponModelFlat } from '../models/weapons.js';
 
 const geoCache = new Map();
 function bodyGeo(color) {
@@ -18,14 +19,6 @@ function bodyGeo(color) {
   return geoCache.get(color);
 }
 const legGeo = boxesGeometry([{ s: [0.22, 0.82, 0.24], p: [0, -0.41, 0], c: 0x30343d }, { s: [0.24, 0.1, 0.3], p: [0, -0.79, -0.03], c: 0x1b1d22 }]);
-const gunGeos = {
-  rifle: boxesGeometry([{ s: [0.08, 0.1, 0.7], p: [0, 0, -0.3], c: 0x2b2f38 }, { s: [0.06, 0.14, 0.08], p: [0, -0.1, -0.25], c: 0xff8a3d }]),
-  shotgun: boxesGeometry([{ s: [0.09, 0.1, 0.75], p: [0, 0, -0.3], c: 0x2b2f38 }, { s: [0.08, 0.07, 0.2], p: [0, -0.06, -0.45], c: 0x8a5a33 }]),
-  sniper: boxesGeometry([{ s: [0.08, 0.09, 0.95], p: [0, 0, -0.4], c: 0x3c4a3a }, { s: [0.06, 0.06, 0.25], p: [0, 0.09, -0.3], c: 0x2b2f38 }]),
-  pistol: boxesGeometry([{ s: [0.06, 0.08, 0.24], p: [0, 0, -0.12], c: 0x2b2f38 }]),
-  revolver: boxesGeometry([{ s: [0.06, 0.08, 0.3], p: [0, 0, -0.15], c: 0xd6dbe3 }]),
-  knife: boxesGeometry([{ s: [0.02, 0.05, 0.26], p: [0, 0, -0.16], c: 0xd6dbe3 }]),
-};
 const arm = boxesGeometry([{ s: [0.16, 0.16, 0.5], p: [0, 0, -0.2], c: 0x30343d }]);
 
 const shadowTex = (() => {
@@ -54,9 +47,9 @@ export class PlayerModel {
     this.armPivot = new THREE.Group();
     this.armPivot.position.set(0.3, 1.32, 0);
     this.arm = new THREE.Mesh(arm, flatMat);
-    this.gun = new THREE.Mesh(gunGeos.rifle, flatMat);
-    this.gun.position.set(-0.05, 0.06, -0.35);
-    this.armPivot.add(this.arm, this.gun);
+    this.armPivot.add(this.arm);
+    this.guns = {}; // the same weapon models as first person, built on first use
+    this.gun = null;
     this.upper = new THREE.Group();
     this.upper.add(this.body, this.armPivot);
     this.root.add(this.upper, this.legL, this.legR);
@@ -64,7 +57,8 @@ export class PlayerModel {
     this.shadow.renderOrder = 1;
     scene.add(this.root, this.shadow);
     this.color = color;
-    this.weapon = 'rifle';
+    this.weapon = null;
+    this.setWeapon('rifle');
     this.walk = 0;
     this.lastX = 0; this.lastZ = 0;
   }
@@ -76,9 +70,29 @@ export class PlayerModel {
   }
 
   setWeapon(id) {
-    if (id === this.weapon || !gunGeos[id]) return;
+    if (id === this.weapon) return;
+    if (!this.guns[id]) {
+      const g = weaponModelFlat(id);
+      if (!g) return;
+      // Hand at the end of the arm (0, 0, -0.42 from the shoulder): put the weapon's grip socket there
+      const grip = g.getObjectByName('grip');
+      g.position.set(-0.04, -0.01, -0.42).sub(grip ? grip.position : new THREE.Vector3());
+      g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+      this.armPivot.add(g);
+      this.guns[id] = g;
+    }
+    if (this.gun) this.gun.visible = false;
     this.weapon = id;
-    this.gun.geometry = gunGeos[id];
+    this.gun = this.guns[id];
+    this.gun.visible = true;
+  }
+
+  /** World position of the held weapon's muzzle / ejection port (for tracers, flashes, casings). */
+  socketWorld(name, out = new THREE.Vector3()) {
+    const s = this.gun?.getObjectByName(name);
+    if (!s || !this.root.visible) return null;
+    this.root.updateMatrixWorld(true);
+    return s.getWorldPosition(out);
   }
 
   /** e: { x,y,z,yaw,pitch,h,sliding,grounded, weapon, alive }, floorY for the shadow */

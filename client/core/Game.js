@@ -26,6 +26,21 @@ export class Game {
     this.r = new Renderer(container);
     this.vm = new Viewmodel(this.r.vmScene);
     this.fx = new Effects(this.r.scene);
+    this.viewVel = [0, 0, 0];
+    // Casings leave the viewmodel's ejection port and continue as world objects that bounce on the floor
+    this.vm.onEject = (pos, vel, kind) => {
+      const p = this.r.vmToWorld(pos);
+      vel.applyQuaternion(this.r.camera.quaternion);
+      vel.x += this.viewVel[0]; vel.y += this.viewVel[1]; vel.z += this.viewVel[2];
+      this.fx.casing(p, vel, kind);
+    };
+    this.vm.onSound = (name) => sfx.mech(name);
+    this.fx.groundAt = (x, y, z) => {
+      const c = this.session?.coll;
+      const d = c ? c.raycast(x, y, z, 0, -1, 0, 30) : Infinity;
+      return d === Infinity ? y - 30 : y - d;
+    };
+    this.fx.onCasingLand = (p) => sfx.casing([p.x, p.y, p.z]);
     this.hud = new Hud(this);
     this.models = new Map();
     this.session = null;
@@ -93,7 +108,7 @@ export class Game {
   }
 
   /** Called when the session (re)spawns the local player (also every round start). */
-  setView(yaw, pitch = 0) { this.yaw = yaw; this.pitch = pitch; this.resetAim(); }
+  setView(yaw, pitch = 0) { this.yaw = yaw; this.pitch = pitch; this.resetAim(); this.vm.draw(); }
 
   onAction(a, down) {
     if (!this.running) return;
@@ -242,9 +257,10 @@ export class Game {
     const showVm = !!(view && view.alive);
     if (showVm) {
       const w = currentWeapon(ws);
+      this.viewVel = [view.vx, view.vy || 0, view.vz];
       this.vm.update(dt, {
         weapon: w.id, ws, speed: Math.hypot(view.vx, view.vz), grounded: view.grounded, sliding: view.sliding,
-        mdx: this.lastMouse[0], mdy: this.lastMouse[1],
+        sprint: input.active('sprint'), mdx: this.lastMouse[0], mdy: this.lastMouse[1],
       });
     }
     this.fx.update(dt);
@@ -356,12 +372,9 @@ export class Game {
     const coll = this.session.coll;
     const w = WEAPONS[act.weapon];
     const o = act.origin;
-    const cam = this.r.camera;
-    // Tracers start at the viewmodel muzzle (roughly: right/down of the eye)
-    const yaw = cam.rotation.y;
-    const rx = Math.cos(yaw), rz = -Math.sin(yaw);
-    const fwd = dirFromAngles(cam.rotation.y, cam.rotation.x);
-    const muzzle = [o[0] + rx * 0.15 + fwd[0] * 0.5, o[1] - 0.12 + fwd[1] * 0.5, o[2] + rz * 0.15 + fwd[2] * 0.5];
+    // Tracers start at the viewmodel's muzzle socket (mapped to the world point drawn at the same pixel)
+    const mw = this.r.vmToWorld(this.vm.muzzleCam());
+    const muzzle = [mw.x, mw.y, mw.z];
     const n = [0, 0, 0];
     const targets = this.session.aimTargets ? this.session.aimTargets() : [];
     act.dirs.forEach((d, i) => {
@@ -386,9 +399,13 @@ export class Game {
         if (ev.id === localId) continue; // predicted locally
         const o = ev.o;
         const w = WEAPONS[ev.w];
+        // Tracers and the flash come from the shooter's weapon model when we can see it
+        const model = this.models.get(ev.id);
+        const mz = model?.socketWorld('muzzle');
+        const from = mz ? [mz.x, mz.y, mz.z] : o;
         for (let i = 0; i < ev.h.length; i++) {
           const h = ev.h[i];
-          if (i < 3 || w.pellets <= 4) this.fx.tracer(o, h, ev.w === 'sniper' ? [0.7, 0.9, 1] : [1, 0.8, 0.45], ev.w === 'sniper' ? 0.3 : 0.1);
+          if (i < 3 || w.pellets <= 4) this.fx.tracer(from, h, ev.w === 'sniper' ? [0.7, 0.9, 1] : [1, 0.8, 0.45], ev.w === 'sniper' ? 0.3 : 0.1);
           if (h[3]) {
             const dx = o[0] - h[0], dy = o[1] - h[1], dz = o[2] - h[2], l = Math.hypot(dx, dy, dz) || 1;
             this.fx.impact(h, [dx / l, dy / l, dz / l], h[3] === 1 ? [0.9, 0.2, 0.2] : [0.95, 0.85, 0.6], w.pellets > 1 ? 2 : 5);
@@ -396,7 +413,14 @@ export class Game {
         }
         const d0 = ev.h[0];
         const dx = d0[0] - o[0], dy = d0[1] - o[1], dz = d0[2] - o[2], l = Math.hypot(dx, dy, dz) || 1;
-        this.fx.muzzle([o[0] + dx / l * 0.7, o[1] - 0.25 + dy / l * 0.7, o[2] + dz / l * 0.7]);
+        if (mz) this.fx.muzzle([mz.x + dx / l * 0.05, mz.y + dy / l * 0.05, mz.z + dz / l * 0.05]);
+        else this.fx.muzzle([o[0] + dx / l * 0.7, o[1] - 0.25 + dy / l * 0.7, o[2] + dz / l * 0.7]);
+        const ej = mz && w.kind === 'gun' && ev.w !== 'revolver' ? model.socketWorld('eject') : null;
+        if (ej && this.r.camera.position.distanceToSquared(ej) < 400) {
+          // casing flies out to the shooter's right
+          const yaw = model.root.rotation.y;
+          this.fx.casing(ej, [Math.cos(yaw) * 1.6, 1.4, -Math.sin(yaw) * 1.6], ev.w === 'shotgun' ? 'shell' : ev.w === 'sniper' ? 'sniper' : ev.w === 'pistol' ? 'pistol' : 'rifle');
+        }
         sfx.shot(ev.w, o);
       } else if (ev.e === 'melee') {
         if (ev.id !== localId) {

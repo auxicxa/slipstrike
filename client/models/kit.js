@@ -28,16 +28,17 @@ export function mat(name, opts = {}) {
 
 export const MATERIALS = {
   // Weapons
-  gunmetal: { color: 0x2c3038, metalness: 0.7, roughness: 0.42 },
-  steel: { color: 0xa9b2bd, metalness: 0.9, roughness: 0.28 },
-  darksteel: { color: 0x4a5059, metalness: 0.85, roughness: 0.35 },
-  polymer: { color: 0x25282d, metalness: 0.05, roughness: 0.72 },
+  gunmetal: { color: 0x3d434d, metalness: 0.6, roughness: 0.48 },
+  steel: { color: 0xa9b2bd, metalness: 0.85, roughness: 0.4 },
+  darksteel: { color: 0x5a616c, metalness: 0.8, roughness: 0.34 },
+  polymer: { color: 0x33373e, metalness: 0.05, roughness: 0.68 },
   tan: { color: 0x9c8461, metalness: 0.05, roughness: 0.7 },
   olive: { color: 0x4f5a3d, metalness: 0.1, roughness: 0.65 },
   wood: { color: 0x7a4b2a, metalness: 0.0, roughness: 0.58 },
-  rubber: { color: 0x17191c, metalness: 0.0, roughness: 0.92 },
+  rubber: { color: 0x1f2226, metalness: 0.0, roughness: 0.92 },
   brass: { color: 0xc9a14a, metalness: 0.95, roughness: 0.3 },
   accent: { color: 0xff8a3d, metalness: 0.2, roughness: 0.45 },
+  lensGlass: { color: 0x6fb7d6, metalness: 0.2, roughness: 0.05, transparent: true, opacity: 0.22, depthWrite: false },
   lens: { color: 0x2a6f8f, metalness: 0.3, roughness: 0.08, emissive: 0x0e3b52, emissiveIntensity: 0.6 },
   reddot: { color: 0xff3b3b, emissive: 0xff2020, emissiveIntensity: 2.5, metalness: 0, roughness: 0.4 },
   edge: { color: 0xbff4ff, emissive: 0x38d8ff, emissiveIntensity: 1.6, metalness: 0.6, roughness: 0.2 },
@@ -49,6 +50,8 @@ export const MATERIALS = {
   armor: { color: 0x2a2e35, metalness: 0.35, roughness: 0.55 },
   boot: { color: 0x1d1e22, metalness: 0.0, roughness: 0.85 },
   glove: { color: 0x22252a, metalness: 0.0, roughness: 0.8 },
+  gloveTan: { color: 0x8a7556, metalness: 0.0, roughness: 0.85 },
+  sleeve: { color: 0x2c3442, metalness: 0.0, roughness: 0.9 },
   skin1: { color: 0xe0b48f, metalness: 0.0, roughness: 0.75 },
   skin2: { color: 0xa8714a, metalness: 0.0, roughness: 0.75 },
   skin3: { color: 0x6b4630, metalness: 0.0, roughness: 0.75 },
@@ -120,7 +123,7 @@ export function cylY(r, h, seg = 10, rTop = r) { return new THREE.CylinderGeomet
 /** Lathe around Z: pts are [radius, z] pairs, z forward (negative). */
 export function latheZ(pts, seg = 10) {
   const g = new THREE.LatheGeometry(pts.map(([r, z]) => new THREE.Vector2(r, z)), seg);
-  g.rotateX(-Math.PI / 2);
+  g.rotateX(Math.PI / 2); // lathe height (y) → z, so negative values run forward like everything else
   return g;
 }
 
@@ -198,4 +201,42 @@ export function countMeshes(obj) {
   let n = 0;
   obj.traverse((o) => { if (o.isMesh && o.visible) n++; });
   return n;
+}
+
+/**
+ * Bake a multi-material model into ONE mesh (vertex colours, one shared material): the same shape
+ * for 1 draw call, for things seen at a distance (third-person weapons). Named sockets are kept.
+ */
+const flatMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.55, metalness: 0.35 });
+export function flattenModel(root) {
+  root.updateMatrixWorld(true);
+  const inv = new THREE.Matrix4().copy(root.matrixWorld).invert();
+  const geos = [];
+  const sockets = [];
+  const c = new THREE.Color();
+  root.traverse((o) => {
+    if (o.isMesh && o.geometry) {
+      let g = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
+      for (const k of Object.keys(g.attributes)) if (k !== 'position' && k !== 'normal') g.deleteAttribute(k);
+      g.applyMatrix4(new THREE.Matrix4().multiplyMatrices(inv, o.matrixWorld));
+      const m = o.material;
+      c.copy(m.color || c.set(0xffffff));
+      if (m.emissive && m.emissiveIntensity) c.add(m.emissive.clone().multiplyScalar(Math.min(1.5, m.emissiveIntensity)));
+      const n = g.attributes.position.count, col = new Float32Array(n * 3);
+      for (let i = 0; i < n; i++) { col[i * 3] = c.r; col[i * 3 + 1] = c.g; col[i * 3 + 2] = c.b; }
+      g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+      geos.push(g);
+    } else if (o !== root && o.type === 'Object3D' && o.name) {
+      const s = new THREE.Object3D();
+      s.name = o.name;
+      new THREE.Matrix4().multiplyMatrices(inv, o.matrixWorld).decompose(s.position, s.quaternion, s.scale);
+      sockets.push(s);
+    }
+  });
+  const mesh = new THREE.Mesh(mergeGeometries(geos, false), flatMaterial);
+  mesh.geometry.computeBoundingSphere();
+  for (const g of geos) g.dispose();
+  mesh.name = root.name + ':flat';
+  mesh.add(...sockets);
+  return mesh;
 }

@@ -126,6 +126,20 @@ class Sfx {
     const d = this.out(pos ? 0.6 : 0.5, pos); if (!d) return;
     this.noiseBurst(d, this.ctx.currentTime, heavy ? 0.3 : 0.16, { type: 'bandpass', freq: heavy ? 900 : 1600, q: 1.5, freqEnd: heavy ? 3000 : 4000, gain: 0.5, attack: 0.04 });
   }
+  /** A casing hitting the floor: a short metallic tink. */
+  casing(pos = null) {
+    const d = this.out(0.18, pos, 0.15); if (!d) return;
+    const t = this.ctx.currentTime;
+    this.tone(d, t, 0.05, { type: 'triangle', freq: 3200 + Math.random() * 1400, freqEnd: 2600, gain: 0.35 });
+  }
+  /** Mechanical weapon sounds from the viewmodel animation: pump, bolt, magOut, magIn, cylinder. */
+  mech(name) {
+    const d = this.out(0.4, null, 0.2); if (!d) return;
+    const t = this.ctx.currentTime;
+    const f = { pump: 900, bolt: 1400, magOut: 1100, magIn: 1700, cylinder: 2200 }[name] || 1200;
+    this.noiseBurst(d, t, 0.05, { type: 'bandpass', freq: f, q: 2.5, gain: 0.7 });
+    this.tone(d, t + 0.01, 0.03, { type: 'square', freq: f * 0.5, gain: 0.1 });
+  }
   knifeHit() { const d = this.out(0.7); if (!d) return; const t = this.ctx.currentTime; this.tone(d, t, 0.12, { type: 'triangle', freq: 180, freqEnd: 70, gain: 0.8 }); this.noiseBurst(d, t, 0.08, { type: 'lowpass', freq: 1200, gain: 0.6 }); }
 
   footstep(pos = null, sprint = false) {

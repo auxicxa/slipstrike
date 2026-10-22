@@ -2,7 +2,7 @@
 // Each entry: { id, group, label, build() → Object3D, poses?: [...], update?(obj, t, pose), teams? }
 import * as THREE from 'three';
 import { boxesGeometry, flatMat } from '../render/geo.js';
-import { MODELS as LEGACY_WEAPONS } from '../render/Viewmodel.js';
+import { LEGACY_WEAPONS } from './legacy.js';
 import { PlayerModel } from '../render/PlayerModel.js';
 import { TEAM_COLORS } from '../../shared/config/game.js';
 
@@ -31,3 +31,20 @@ register({
     return g;
   },
 });
+
+// ---------------------------------------------------------------- weapons
+import { weaponModel } from './weapons.js';
+const WEAPON_LABELS = { rifle: 'Assault Rifle', pistol: 'Pistol', revolver: 'Revolver', shotgun: 'Shotgun', sniper: 'Sniper', knife: 'Knife' };
+for (const [id, label] of Object.entries(WEAPON_LABELS)) {
+  register({ id: 'weapon-' + id, group: 'Weapons', label, budget: 3000, build: () => weaponModel(id) });
+}
+
+// ---------------------------------------------------------------- first person (the real Viewmodel, scripted)
+import { buildFpPreview, seekFp, FP_POSES } from './vmPreview.js';
+for (const [id, label] of Object.entries(WEAPON_LABELS)) {
+  register({
+    id: 'fp-' + id, group: 'First person', label: label + ' (1st person)', fp: true,
+    poses: FP_POSES[id === 'knife' ? 'knife' : 'gun'],
+    build: () => buildFpPreview(id), update: (obj, t, pose) => seekFp(obj, t, pose),
+  });
+}

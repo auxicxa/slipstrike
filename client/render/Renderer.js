@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { settings } from '../core/Settings.js';
 import { buildMapMesh } from './MapMesh.js';
+import { configureRenderer, environmentFor } from './lighting.js';
 
 const QUALITY = {
   low: { ratio: 0.75, aa: false },
@@ -18,14 +19,19 @@ export class Renderer {
     this.vmScene = new THREE.Scene();
     this.vmCamera = new THREE.PerspectiveCamera(62, 1, 0.01, 10);
 
-    const hemi = new THREE.HemisphereLight(0xdfefff, 0x6b6250, 1.6);
-    const sun = new THREE.DirectionalLight(0xffffff, 1.8);
+    const hemi = new THREE.HemisphereLight(0xdfefff, 0x6b6250, 1.9);
+    const sun = new THREE.DirectionalLight(0xfff4e6, 2.2);
     sun.position.set(0.45, 0.85, 0.3);
     this.scene.add(hemi, sun);
-    const vmHemi = new THREE.HemisphereLight(0xdfefff, 0x5a5a66, 1.7);
-    const vmSun = new THREE.DirectionalLight(0xffffff, 1.6);
-    vmSun.position.set(0.3, 1, 0.6);
-    this.vmScene.add(vmHemi, vmSun);
+    this.sunDir = sun.position.clone().normalize();
+    // The viewmodel is lit by the same sky and sun, turned into camera space every frame so the gun
+    // brightens when you face the sun
+    this.vmHemi = new THREE.HemisphereLight(0xdfefff, 0x5a5a66, 1.5);
+    this.vmSun = new THREE.DirectionalLight(0xfff4e6, 2.0);
+    this.vmScene.add(this.vmHemi, this.vmSun, this.vmSun.target);
+    this.vmScene.environmentIntensity = 0.5;
+    this.scene.environmentIntensity = 0.45;
+    this._q = new THREE.Quaternion();
 
     this.mapMesh = null;
     this.quality = null;
@@ -53,7 +59,11 @@ export class Renderer {
     this.renderer = new THREE.WebGLRenderer({ antialias: cfg.aa, powerPreference: 'high-performance', stencil: false });
     this.renderer.autoClear = false;
     this.renderer.info.autoReset = false;
-    this.renderer.outputColorSpace = THREE.SRGBColorSpace;
+    configureRenderer(this.renderer, 1.25);
+    // Metals need something to reflect: one generated studio environment for both scenes
+    const env = environmentFor(this.renderer);
+    this.scene.environment = env;
+    this.vmScene.environment = env;
     this.renderer.domElement.id = 'game-canvas';
     this.container.prepend(this.renderer.domElement);
     this.resize();
@@ -81,8 +91,24 @@ export class Renderer {
     this.scene.fog = new THREE.Fog(map.fog, map.fogNear, map.fogFar);
   }
 
+  /**
+   * A camera-space point of the viewmodel → the world point drawn at the same pixel and distance
+   * (the two cameras have different FOVs, so a plain transform would be off-screen-position).
+   */
+  vmToWorld(v, out = new THREE.Vector3()) {
+    const d = v.length();
+    this.camera.updateMatrixWorld();
+    out.copy(v).applyMatrix4(this.vmCamera.projectionMatrix);
+    out.applyMatrix4(this.camera.projectionMatrixInverse).normalize().multiplyScalar(d);
+    return out.applyMatrix4(this.camera.matrixWorld);
+  }
+
   render(showViewmodel = true) {
     const r = this.renderer;
+    // Sun and sky in camera space for the viewmodel
+    this._q.copy(this.camera.quaternion).invert();
+    this.vmSun.position.copy(this.sunDir).applyQuaternion(this._q);
+    this.vmHemi.position.set(0, 1, 0).applyQuaternion(this._q);
     r.info.reset();
     r.clear();
     r.render(this.scene, this.camera);
