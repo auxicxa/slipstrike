@@ -27,11 +27,16 @@ m.box(36, 0, -30, 37, 7, -12, WALL).run();
 m.box(28, 0, -30, 29, 7, -12, WALL).run();
 
 // --- Crates as cover near the dummies ---
-m.block(-10, -22, 2, 2, 1.2, CRATE);
-m.block(10, -22, 2, 2, 1.2, CRATE);
-m.block(0, -30, 4, 1, 2.2, CRATE);
-m.block(-18, -40, 3, 3, 3, CRATE);
-m.block(18, -40, 3, 3, 3, CRATE);
+m.block(-10, -22, 2, 2, 1.2, CRATE).kind('crate');
+m.block(10, -22, 2, 2, 1.2, CRATE).kind('crate');
+m.block(0, -30, 4, 1, 2.2, CRATE).kind('crate');
+m.block(-18, -40, 3, 3, 3, CRATE).kind('crate');
+m.block(18, -40, 3, 3, 3, CRATE).kind('crate');
+
+// Decoration (no collision)
+m.prop('floodlight', -43.4, 0, 38.4, -0.8).prop('floodlight', 43.4, 0, 38.4, 0.8).prop('floodlight', 0, 0, -58.5, Math.PI);
+m.prop('barrelRed', 43.6, 0, 20).prop('barrelBlue', 43.4, 0, 21, 0.6).prop('pallet', -43, 0, 30, Math.PI / 2);
+m.prop('cone', 31, 0, -11).prop('cone', 34, 0, -11, 0.4).prop('cone', 31, 0, -31).prop('cone', 34, 0, -31, 0.4);
 
 // --- Long lane far end: sniper targets on a balcony ---
 m.box(-12, 0, -60, 12, 2.5, -54, PLAT);

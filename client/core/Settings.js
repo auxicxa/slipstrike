@@ -19,6 +19,8 @@ export const DEFAULT_SETTINGS = {
   quality: 'med',       // 'low' | 'med' | 'high'
   autoQuality: true,    // step quality down automatically if the game runs below ~50 FPS
   showFps: false,
+  bloom: 'auto',        // 'auto' (on at High) | 'on' | 'off'
+  vignette: true,
   // Audio
   volume: 0.7,
   // HUD

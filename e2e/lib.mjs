@@ -20,6 +20,8 @@ export async function openPage(browser, query = '?nolock', viewport = { width: 1
   page.on('console', (m) => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
   await page.goto(BASE + '/' + query);
   await page.waitForFunction(() => !!window.__slip);
+  // Headless Chromium renders in software (~10 FPS), so checks run at Low unless E2E_QUALITY says otherwise
+  await page.evaluate((q) => window.__slip.settings.set('quality', q), process.env.E2E_QUALITY || 'low');
   return { page, ctx, errors };
 }
 

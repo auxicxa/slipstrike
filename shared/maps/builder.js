@@ -1,5 +1,7 @@
 // Helpers for writing maps as data. Maps are plain objects:
-//   { id, name, boxes: [{min,max,c}], ramps: [{min,max,dir,c}], spawns: {0:[[x,y,z,yaw]], 1:[...]}, ffa:[...] }
+//   { id, name, boxes: [{min,max,c,run?,kind?}], ramps: [{min,max,dir,c}], spawns: {0:[[x,y,z,yaw]], 1:[...]}, ffa:[...],
+//     props: [{type, p:[x,y,z], yaw, s}], light: {...} }
+// Props and box kinds are visual only: collision only ever uses the boxes and ramps.
 // Colours are hex numbers. Use mirror() to build one half of a map and get a point-symmetric
 // (180° rotated) copy for the other team, which keeps both sides fair. Call run() after adding a box to
 // let players wall run on its sides (the map renderer marks those walls with a stripe).
@@ -18,6 +20,10 @@ export class MapBuilder {
       ffa: [],
       dummies: [],
       killY: opts.killY ?? -25,
+      props: [],
+      // lighting look (client only): sky gradient top, sun colour/strength/direction, ground bounce colour
+      light: { skyTop: opts.skyTop ?? 0x5f8fc7, sun: opts.sun ?? 0xfff2df, sunIntensity: opts.sunIntensity ?? 2.4,
+        sunDir: opts.sunDir ?? [0.45, 0.85, 0.3], ground: opts.groundLight ?? 0x5a5148, hemi: opts.hemi ?? 1.0, exposure: opts.exposure ?? 1.0 },
     };
   }
 
@@ -28,6 +34,18 @@ export class MapBuilder {
       max: [Math.max(x0, x1), Math.max(y0, y1), Math.max(z0, z1)],
       c,
     });
+    return this;
+  }
+
+  /** Visual style for the last `n` boxes: 'container' (corrugated), 'crate' (framed), 'wall' (capped, pilasters). */
+  kind(k, n = 1) {
+    for (const b of this.map.boxes.slice(-n)) b.kind = k;
+    return this;
+  }
+
+  /** Decorative prop (no collision), see client/models/props.js for the types. */
+  prop(type, x, y, z, yaw = 0, s = 1) {
+    this.map.props.push({ type, p: [x, y, z], yaw, s });
     return this;
   }
 
@@ -84,8 +102,9 @@ export class MapBuilder {
     const m = this.map;
     const boxes = m.boxes.slice();
     for (const b of boxes) {
-      m.boxes.push({ min: [-b.max[0], b.min[1], -b.max[2]], max: [-b.min[0], b.max[1], -b.min[2]], c: b.c, noclip: b.noclip, run: b.run });
+      m.boxes.push({ min: [-b.max[0], b.min[1], -b.max[2]], max: [-b.min[0], b.max[1], -b.min[2]], c: b.c, noclip: b.noclip, run: b.run, kind: b.kind });
     }
+    for (const p of m.props.slice()) m.props.push({ type: p.type, p: [-p.p[0], p.p[1], -p.p[2]], yaw: p.yaw + Math.PI, s: p.s });
     const flip = { '+x': '-x', '-x': '+x', '+z': '-z', '-z': '+z' };
     for (const r of m.ramps.slice()) {
       m.ramps.push({ min: [-r.max[0], r.min[1], -r.max[2]], max: [-r.min[0], r.max[1], -r.min[2]], dir: flip[r.dir], c: r.c });

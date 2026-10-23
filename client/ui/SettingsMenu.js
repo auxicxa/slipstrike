@@ -118,8 +118,12 @@ function videoTab() {
     slider('fov', 'Field of view', 70, 115, 1, (v) => v + '°'),
     segmented('quality', 'Graphics quality', [['low', 'Low'], ['med', 'Medium'], ['high', 'High']]),
     toggle('autoQuality', 'Lower quality automatically if the game runs slowly', null, 'Steps down one level when the game stays below 50 FPS.'),
-    toggle('showFps', 'Show performance overlay', null, 'Also bound to the ` key.'),
-  ), h('div.hint', { style: { marginTop: '12px' } }, 'Medium renders at 1× pixel ratio. That is the best balance on school MacBooks. High renders at Retina resolution with antialiasing.'));
+    segmented('bloom', 'Bloom (glow around lights)', [['auto', 'Auto'], ['on', 'On'], ['off', 'Off']]),
+    toggle('vignette', 'Vignette (darker screen edges)'),
+    toggle('showFps', 'Show FPS counter and draw calls', null, 'Also bound to the ` key.'),
+  ), h('div.hint', { style: { marginTop: '12px' } },
+    'Low: no shadows or accent lights, 0.75× resolution. Medium: soft sun shadows, a few lamp lights, 1× resolution: the best balance on school MacBooks. ',
+    'High: sharper shadows, bloom, every lamp lit, Retina resolution with antialiasing. Bloom on Auto follows the quality.'));
 }
 
 function audioTab() {

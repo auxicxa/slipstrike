@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { input } from './Input.js';
 import { settings } from './Settings.js';
-import { Renderer } from '../render/Renderer.js';
+import { Renderer, QUALITY } from '../render/Renderer.js';
 import { Viewmodel } from '../render/Viewmodel.js';
 import { Effects } from '../render/Effects.js';
 import { PlayerModel } from '../render/PlayerModel.js';
@@ -68,8 +68,7 @@ export class Game {
   }
 
   qualityScale() {
-    const q = settings.get('quality');
-    this.fx.scale = q === 'low' ? 0.4 : q === 'med' ? 0.75 : 1;
+    this.fx.scale = (QUALITY[settings.get('quality')] || QUALITY.med).particles;
   }
 
   // ------------------------------------------------------------------ session

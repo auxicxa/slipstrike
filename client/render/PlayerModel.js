@@ -30,6 +30,7 @@ export class PlayerModel {
     this.root = new THREE.Group();
     const lk = look || lookFor(id);
     this.char = new Character(lk.outfit, lk.skin, color);
+    this.char.mesh.castShadow = true;
     this.root.add(this.char.mesh);
     this.shadow = new THREE.Mesh(shadowGeo, shadowMat);
     this.shadow.renderOrder = 1;

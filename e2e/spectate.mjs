@@ -36,8 +36,10 @@ await page.screenshot({ path: 'e2e/out/spectate.png' });
 if (s1 && s1.n > 1) {
   await page.keyboard.press('KeyF');
   await sleep(200);
-  const s2 = await page.evaluate(() => window.__slip.online.spectateView()?.name);
-  check(s2 && s2 !== s1.name, `fire key cycles to the next teammate (${s1.name} → ${s2})`);
+  const { s2, left } = await page.evaluate(() => ({ s2: window.__slip.online.spectateView()?.name, left: window.__slip.online.spectateCandidates().length }));
+  // (the enemy bots keep hunting meanwhile: if only one teammate is left there is nobody to cycle to)
+  if (left > 1) check(s2 && s2 !== s1.name, `fire key cycles to the next teammate (${s1.name} → ${s2})`);
+  else console.log(`    (only ${left} teammate left by then: cycling not checked)`);
 }
 check(errors.length === 0, 'no console errors' + (errors.length ? ': ' + errors.slice(0, 3).join(' | ') : ''));
 bots.kill();

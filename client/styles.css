@@ -247,3 +247,5 @@ h3 { margin: 18px 0 8px; font-size: 13px; color: var(--dim); text-transform: upp
 .move-help h3 { margin: 0 0 6px; }
 .move-help ul { margin: 0; padding-left: 18px; line-height: 1.6; font-size: 13px; color: #d5dbe5; }
 .move-help .stripe { color: #5dff9c; font-weight: 700; }
+
+.vignette { position: absolute; inset: 0; pointer-events: none; background: radial-gradient(ellipse at center, rgba(0,0,0,0) 58%, rgba(0,0,0,0.34) 100%); }

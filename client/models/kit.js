@@ -72,6 +72,7 @@ export const MATERIALS = {
   barrelBlue: { color: 0x2f5f9e, metalness: 0.45, roughness: 0.5 },
   pipe: { color: 0x7d858f, metalness: 0.75, roughness: 0.4 },
   hazard: { color: 0xe0b23a, metalness: 0.1, roughness: 0.6 },
+  window: { color: 0xffd9a8, emissive: 0xffb860, emissiveIntensity: 0.75, metalness: 0, roughness: 0.4 },
   lampGlow: { color: 0xfff1d0, emissive: 0xffd9a0, emissiveIntensity: 3, metalness: 0, roughness: 0.5 },
   signTeal: { color: 0x2ad1c0, emissive: 0x16b0a0, emissiveIntensity: 1.6, metalness: 0, roughness: 0.5 },
   signPink: { color: 0xff4f8b, emissive: 0xe0306a, emissiveIntensity: 1.6, metalness: 0, roughness: 0.5 },

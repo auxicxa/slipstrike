@@ -46,3 +46,7 @@ OUTFITS.forEach((o, i) => {
     poses: CHAR_POSES, build: (team = 0) => buildCharPreview(i, i, team), update: (obj, t, pose) => seekChar(obj, t, pose),
   });
 });
+
+// ---------------------------------------------------------------- map props
+import { PROP_TYPES, propModel } from './props.js';
+for (const t of PROP_TYPES) register({ id: 'prop-' + t, group: 'Map props', label: t, build: () => propModel(t) });
