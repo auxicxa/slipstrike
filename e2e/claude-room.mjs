@@ -18,6 +18,7 @@ const open = async (name) => {
   page.on('console', (m) => { if (m.type() === 'error' || /host presence/.test(m.text())) errors.push(`${name}: ${m.text()}`); });
   await page.goto(BASE + q);
   await page.waitForFunction(() => !!window.__slip);
+  await page.evaluate((q) => window.__slip.settings.set('quality', q), process.env.E2E_QUALITY || 'low'); // software rendering
   await page.fill('input[placeholder="Nickname"]', name);
   return page;
 };

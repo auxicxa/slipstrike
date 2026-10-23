@@ -201,6 +201,10 @@ export class Renderer {
     this.scene.background = new THREE.Color(map.fog);
     this.scene.fog = new THREE.Fog(map.fog, map.fogNear, map.fogFar);
     this.placeAccentLights();
+    // Compile the map's shaders now (in parallel where the GPU driver allows), not on the first frames
+    // of the round
+    this.renderer.compileAsync?.(this.scene, this.camera).catch(() => {});
+    this.renderer.compileAsync?.(this.vmScene, this.vmCamera).catch(() => {});
   }
 
   /** Point lights for the first few lamp/sign props (how many depends on the quality). */
